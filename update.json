@@ -1,6 +1,6 @@
 {
  "version": "3658d8c5a18f",
- "built": "2026-11-25 02:39",
+ "built": "2026-11-25 02:46",
  "files": {
   "assets/apple-touch-icon.png": {
    "sha256": "e9aca0c2fe30a5f6300661decbd1d578c00c7c0cead84b40374e696224d6712f",
@@ -82,12 +82,5 @@
    "sha256": "a8f3ba90c4c7b969fff476e6917c041868625544878c66b645f73cf41c44844a",
    "size": 1034
   }
- },
- "apk": {
-  "versionCode": 1,
-  "versionName": "1.0",
-  "path": "BFlatStudio.apk",
-  "sha256": "250a404db5cd47bd4b6feebd1f5fe77200db722ec65cbbbd42f87b0ee8606d6c",
-  "size": 1865744
  }
 }
