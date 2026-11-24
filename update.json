@@ -1,7 +1,19 @@
 {
- "version": "f5357d37dd57",
- "built": "2026-11-25 01:56",
+ "version": "5a86905b84d9",
+ "built": "2026-11-25 02:11",
  "files": {
+  "assets/apple-touch-icon.png": {
+   "sha256": "e9aca0c2fe30a5f6300661decbd1d578c00c7c0cead84b40374e696224d6712f",
+   "size": 30818
+  },
+  "assets/icon-192.png": {
+   "sha256": "2d3ff0cf6940dff42a37ecc40114cb79f82e9031cb52c57d2e09081fc1c0dd3c",
+   "size": 28160
+  },
+  "assets/icon-512.png": {
+   "sha256": "470d92aff6ac7a991bca6a6c3466f84c31a38b84b6a732de1e1d9bd328a9cdcd",
+   "size": 165525
+  },
   "assets/logo.ico": {
    "sha256": "2abb233313494e19c7d1c1f5de7275d3162ffc272d16ea200e9e71342a61e8e7",
    "size": 67415
@@ -23,12 +35,12 @@
    "size": 1503416
   },
   "index.html": {
-   "sha256": "8d70dca6b222a06feb91d2c392d45e65a113c856991487e1e1bb08f1743f0f86",
-   "size": 4485
+   "sha256": "cf9b6ab2ba9f1d44d6afa5cd9e34f6099c5230b952aefd4249058dc127ebc20a",
+   "size": 4959
   },
   "js/app.js": {
-   "sha256": "c9b716e3f9f1ffc223f40a56beb14609e6b2ca5e55040b123242f17a5f57d983",
-   "size": 209222
+   "sha256": "716d875c61de84634c2da82d900ab3aa87e47ad1bd1f913512d1bba46f2efd19",
+   "size": 210019
   },
   "js/audio.js": {
    "sha256": "1197d4458b423279714557c5e262103ef2e32ffd81672718c5a8a4d6a4eb69dc",
@@ -39,8 +51,8 @@
    "size": 11463
   },
   "js/i18n.js": {
-   "sha256": "60099cc35f73567d1c032b5b2ee120817aac65d3e025a4c518eaa1c8e471d8a1",
-   "size": 78132
+   "sha256": "2325e6d3b9ec000eb3336ecad45d91eac0e31801a564a9d6fef2f12b39a4f93d",
+   "size": 78366
   },
   "js/io.js": {
    "sha256": "51fbf1dfbd66178b6e34bb070853911e42ffc45190272c154116b72f48d12c7d",
@@ -61,6 +73,21 @@
   "js/vendor/pdf.worker.min.js": {
    "sha256": "feabdf309770ed24bba31a5467836cdc8cf639c705af27d52b585b041bb8527b",
    "size": 1087212
+  },
+  "manifest.webmanifest": {
+   "sha256": "bca300cee40fefcedbd32e606009aecc3c3f92c8ebdd5b21871330a43539b1cc",
+   "size": 525
+  },
+  "sw.js": {
+   "sha256": "a8f3ba90c4c7b969fff476e6917c041868625544878c66b645f73cf41c44844a",
+   "size": 1034
   }
+ },
+ "apk": {
+  "versionCode": 1,
+  "versionName": "1.0",
+  "path": "BFlatStudio.apk",
+  "sha256": "164e63629014de4c8ef67a07d04a57ab2b376dfddc962271a8608a5bbe0cf82a",
+  "size": 1861648
  }
 }
