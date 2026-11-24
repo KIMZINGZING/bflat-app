@@ -9,6 +9,40 @@
 const SCORE_IMG_EXT = /\.(png|jpe?g|bmp|gif|webp|tiff?)$/i;
 const SCORE_DOC_EXT = /\.(hwp|hwpx)$/i;
 function isScoreSource(name) { return /\.pdf$/i.test(name) || SCORE_IMG_EXT.test(name) || SCORE_DOC_EXT.test(name); }
+/**
+ * 휴대폰(특히 안드로이드 "다운로드"·클라우드)에서 고른 파일은 이름에 확장자가 없을 때가 있어요 (예: "msf:1000034")
+ * → 파일 앞부분(매직 넘버)·형식으로 종류를 알아내서 이름 끝에 붙여요
+ */
+async function withProperName(file) {
+  const known = /\.(pdf|png|jpe?g|bmp|gif|webp|tiff?|hwp|hwpx|bflat|json|musicxml|xml|mxl|midi?)$/i;
+  if (known.test(file.name || '')) return file;
+  const byType = { 'application/pdf': 'pdf', 'image/png': 'png', 'image/jpeg': 'jpg', 'image/gif': 'gif', 'image/webp': 'webp', 'image/bmp': 'bmp', 'audio/midi': 'mid', 'audio/x-midi': 'mid', 'application/vnd.recordare.musicxml': 'mxl', 'application/vnd.recordare.musicxml+xml': 'musicxml', 'application/x-hwp': 'hwp', 'application/haansofthwp': 'hwp', 'application/vnd.hancom.hwpx': 'hwpx' };
+  let ext = byType[(file.type || '').toLowerCase()];
+  if (!ext) {
+    const head = new Uint8Array(await file.slice(0, 16).arrayBuffer());
+    const s = String.fromCharCode(...head);
+    if (s.startsWith('%PDF')) ext = 'pdf';
+    else if (head[0] === 0x89 && s.slice(1, 4) === 'PNG') ext = 'png';
+    else if (head[0] === 0xFF && head[1] === 0xD8) ext = 'jpg';
+    else if (s.startsWith('GIF8')) ext = 'gif';
+    else if (s.startsWith('RIFF') && s.slice(8, 12) === 'WEBP') ext = 'webp';
+    else if (s.startsWith('BM')) ext = 'bmp';
+    else if (head[0] === 0xD0 && head[1] === 0xCF && head[2] === 0x11 && head[3] === 0xE0) ext = 'hwp';
+    else if (s.startsWith('MThd')) ext = 'mid';
+    else if (s.startsWith('PK')) {
+      // zip: 한글(HWPX)인지 MusicXML(.mxl)인지 안에 든 파일 이름으로
+      const all = new Uint8Array(await file.arrayBuffer());
+      let txt = ''; for (let i = 0; i < all.length; i += 0x8000) txt += String.fromCharCode.apply(null, all.subarray(i, i + 0x8000));
+      ext = /Contents\/section|version\.xml/.test(txt) && !/META-INF\/container\.xml[\s\S]*\.(musicxml|xml)/.test(txt) ? 'hwpx' : 'mxl';
+    } else {
+      const t = s.replace(/^﻿|^\xEF\xBB\xBF/, '').trimStart();
+      if (t.startsWith('{')) ext = 'bflat';
+      else if (t.startsWith('<')) ext = 'musicxml';
+    }
+  }
+  if (!ext) return file;
+  return new File([file], (file.name || 'file').replace(/[:/\\]/g, '_') + '.' + ext, { type: file.type });
+}
 
 /* ---------- zip (HWPX) ---------- */
 function zipEntries(buf) {
