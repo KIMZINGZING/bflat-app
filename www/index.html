@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>BFlat Studio</title>
+<link rel="icon" href="assets/logo.svg" type="image/svg+xml">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body data-mode="note">
+<header id="topbar">
+  <!-- 상단바: 메뉴 둘(파일 · 도구) + 모드 탭 + 꼭 필요한 버튼만 — 가로로 넘치지 않게 -->
+  <button class="btn menu" data-act="menuFile" title="새 악보 · 열기 · 저장 · 내 악보함 · 내보내기 · 인쇄">파일 ▾</button>
+  <button class="btn menu" data-act="menuTools" title="곡 정보 · 조옮김 · 계이름 · 악보 인식(PDF·사진·한글) · MIDI">도구 ▾</button>
+  <span class="grow"></span>
+  <nav id="modes"></nav>
+  <span class="grow"></span>
+  <button class="btn icon" data-act="undo" title="되돌리기 (Ctrl+Z)">↶</button>
+  <button class="btn icon" data-act="redo" title="다시 (Ctrl+Y)">↷</button>
+  <button class="btn play" id="btnPlay" data-act="play" title="재생 / 정지 (Space)">▶ 재생</button>
+  <button class="btn icon" data-act="rewind" title="처음부터">⏮</button>
+  <span class="zoom"><button class="btn icon" data-act="zoomOut" title="축소 (Ctrl+휠)">−</button><span id="zoomLbl">100%</span><button class="btn icon" data-act="zoomIn" title="확대 (Ctrl+휠)">+</button></span>
+  <button class="btn icon" data-act="menuHelp" title="사용법 · 단축키">?</button>
+  <button class="btn icon" data-act="settings" title="설정 (화면 · 언어 · 소리)">⚙</button>
+</header>
+<div id="subbar"></div>
+<div id="workArea">
+  <main id="scroller"><div id="pages"></div></main>
+  <aside id="pdfPanel" hidden>
+    <div class="pdf-resizer" title="끌어서 폭 조절"></div>
+    <div class="pdf-head">
+      <span class="pdf-name" id="pdfName" data-notr>PDF</span>
+      <span class="grow"></span>
+      <button class="btn" data-act="pdfSol" id="btnPdfSol" title="PDF 악보 위에 바로 계이름 적기 (자동 인식 사용)">계이름 넣기</button>
+      <button class="btn primary" data-act="pdfOmr" title="PDF 속 음표를 자동으로 읽어 BFlat 악보로 (Audiveris)">자동 인식 → 악보로</button>
+      <button class="btn" data-act="pdf" title="다른 PDF 열기">다른 PDF</button>
+      <button class="btn icon" data-act="pdfClose" title="닫기">✕</button>
+    </div>
+    <div class="pdf-solbar" id="pdfSolBar" hidden></div>
+    <div class="pdf-body"><iframe id="pdfFrame" title="PDF 악보"></iframe><div id="pdfSolView" hidden></div><div class="pdf-busy" id="pdfBusy" hidden><div class="spin"></div><b>악보 인식 중…</b><span>페이지 수에 따라 몇 분 걸릴 수 있어요</span></div></div>
+  </aside>
+</div>
+<footer id="status">
+  <span id="stInfo"></span>
+  <a href="#" id="stStart" class="green" data-act="rewind" title="재생 시작점 (⏮ = 처음부터)">▶ 처음부터</a>
+  <span id="stOrder" class="blue"></span>
+  <span class="grow"></span>
+  <span id="stSave">자동 저장됨 (이 브라우저)</span>
+  <span class="by">BFlat Studio</span>
+</footer>
+<input type="file" id="fileOpen" hidden accept=".bflat,.json,.musicxml,.xml,.mxl,.pdf,.png,.jpg,.jpeg,.bmp,.gif,.webp,.hwp,.hwpx">
+<input type="file" id="fileMidi" hidden accept=".mid,.midi">
+<input type="file" id="filePdf" hidden accept=".pdf,application/pdf,.png,.jpg,.jpeg,.bmp,.gif,.webp,image/*,.hwp,.hwpx">
+<!-- 터치 화면(휴대폰·태블릿)용 키 패드: 키보드 없이 음높이·이동·지우기 -->
+<div id="touchPad" hidden>
+  <button data-key="ArrowUp" title="음 높이 올리기">▲</button><button data-key="ArrowDown" title="음 높이 내리기">▼</button>
+  <button data-key="ArrowLeft" title="이전 음표">◀</button><button data-key="ArrowRight" title="다음 음표">▶</button>
+  <button data-key="." title="점 붙이기">•</button><button data-key="0" title="쉼표로 바꾸기">𝄽</button>
+  <button data-key="Delete" title="지우기">⌫</button><button data-key="Escape" title="고르기 끝">✕</button>
+</div>
+<div id="modalRoot"></div>
+<div id="popRoot"></div>
+<div id="toast"></div>
+<script src="js/vendor/pdf.min.js"></script>
+<script src="js/i18n.js"></script>
+<script src="js/model.js"></script>
+<script src="js/render.js"></script>
+<script src="js/audio.js"></script>
+<script src="js/io.js"></script>
+<script src="js/docimport.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
