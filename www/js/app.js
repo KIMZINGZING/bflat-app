@@ -1901,10 +1901,12 @@ async function phonePane(el) {
   <div class="pub-status small muted">
     <div>지금 PC 버전: <b data-notr>${esc(st.current)}</b>${st.published ? ` · 올린 버전: <b data-notr>${esc(st.published)}</b> <span data-notr>(${esc(st.publishedAt)})</span>` : ' · 아직 안 올렸어요'}</div>
     ${st.apk ? `<div>휴대폰 앱(APK): <b data-notr>${esc(st.apk.versionName)}</b> — 새 APK도 같이 올려요</div>` : ''}
+    ${st.pages ? `<div>휴대폰에서 받는 주소 (카톡으로 보내기): <b data-notr>${esc(st.pages)}</b> <button class="btn" id="pCopy" style="min-height:0;padding:1px 8px">복사</button></div>` : ''}
     ${st.url ? `<div>휴대폰 앱이 보는 주소: <span data-notr>${esc(st.url)}/update.json</span></div>` : ''}
   </div>
   <p class="muted small">토큰은 이 PC에만, 윈도우 계정으로 암호화해서 저장해요. 설정을 마친 다음 만든 APK부터 자동 업데이트가 켜져요 (APK 만들기.bat).</p>`;
   $$('[data-link]', el).forEach(a => a.addEventListener('click', e => { e.preventDefault(); api.open_url(a.dataset.link); }));
+  const cp = $('#pCopy', el); if (cp) cp.addEventListener('click', async () => { try { await navigator.clipboard.writeText(st.pages); cp.textContent = '✓'; } catch (e) { prompt('', st.pages); } });
   const msg = (t, bad) => { const m = $('#pMsg', el); m.textContent = t; m.style.color = bad ? '#dc2626' : ''; };
   const errText = r => ({ config: LG('계정 이름·저장소 이름·토큰을 모두 넣어 주세요', 'Fill in account, repository and token', 'アカウント名・リポジトリ名・トークンをすべて入れてください'),
     private: LG('저장소가 비공개(Private)예요 · 휴대폰 앱이 받을 수 있게 Public으로 바꿔 주세요', 'The repository is private · make it Public so the phone app can download', 'リポジトリが非公開です · Publicにしてください'),
@@ -2866,6 +2868,10 @@ function init() {
   pages.addEventListener('dblclick', onDblClick);
   pages.addEventListener('contextmenu', onContext);
   document.addEventListener('keydown', onKey);
+  // 인터넷 주소로 연 웹앱(아이폰 Safari 등): 인터넷이 없어도 열리게 (PC 프로그램·안드로이드 앱 안에서는 안 써요)
+  if ('serviceWorker' in navigator && location.protocol === 'https:' && !window.AndroidBridge && !/^(localhost|127\.|bflat\.app$)/.test(location.hostname)) {
+    navigator.serviceWorker.register('sw.js').catch(() => { });
+  }
   // 안드로이드 앱 자동 업데이트 알림 (앱이 새 화면 파일을 받아 두면 불러요)
   window.__bflatUpdateReady = built => {
     modal(`<h2>${LG('새 버전을 받았어요', 'A new version is ready', '新しいバージョンを受け取りました')}</h2>
