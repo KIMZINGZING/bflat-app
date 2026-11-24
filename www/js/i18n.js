@@ -610,6 +610,8 @@ const I18N_DICT = {
   '· 아직 안 올렸어요': ['· not uploaded yet', '· まだアップロードしていません'],
   '휴대폰 앱(APK):': ['Phone app (APK):', 'スマホアプリ(APK):'],
   '— 새 APK도 같이 올려요': ['— the new APK is uploaded too', '— 新しいAPKも一緒にアップロードします'],
+  '휴대폰에서 받는 주소 (카톡으로 보내기):': ['Download address for phones (send via KakaoTalk):', 'スマホでダウンロードするアドレス (カカオトークで送る):'],
+  '복사': ['Copy', 'コピー'],
   '휴대폰 앱이 보는 주소:': ['Address the phone app checks:', 'スマホアプリが見るアドレス:'],
   '토큰은 이 PC에만, 윈도우 계정으로 암호화해서 저장해요. 설정을 마친 다음 만든 APK부터 자동 업데이트가 켜져요 (APK 만들기.bat).': ['The token is stored only on this PC, encrypted with your Windows account. Automatic updates work in APKs built after this setup (APK 만들기.bat).', 'トークンはこのPCにだけ、Windowsアカウントで暗号化して保存します。設定後に作ったAPKから自動更新が有効になります (APK 만들기.bat)。'],
   '음 높이 올리기': ['Pitch up', '音を上げる'],
