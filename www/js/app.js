@@ -2138,6 +2138,7 @@ async function pdfDialog() {
  * → 그다음은 PDF와 똑같이 "자동 인식 → 악보로" · "계이름 넣기"
  */
 async function openScoreSource(file) {
+  file = await withProperName(file);
   if (/\.pdf$/i.test(file.name)) { showPdf(file); return; }
   toast(LG('악보 그림을 준비하는 중…', 'Preparing the score image…', '楽譜の画像を準備中…'), 8000);
   let r;
@@ -2158,26 +2159,77 @@ async function openScoreSource(file) {
     ? LG(`한글 파일에서 악보 그림 ${r.pages}장을 찾았어요 · "자동 인식 → 악보로"를 눌러요`, `Found ${r.pages} score image(s) in the HWP file · press "Recognize → score"`, `HWPファイルから楽譜の画像を${r.pages}枚見つけました · 「自動認識 → 楽譜へ」を押してください`)
     : LG('사진을 열었어요 · "자동 인식 → 악보로"를 눌러요 (반듯하고 밝게 찍은 사진일수록 잘 읽어요)', 'Photo opened · press "Recognize → score" (straight, well-lit photos work best)', '写真を開きました · 「自動認識 → 楽譜へ」を押してください (まっすぐ明るく撮った写真ほどよく読めます)'), 5200);
 }
+/**
+ * 브라우저에 PDF 보기 기능이 없으면(휴대폰 크롬·안드로이드 앱·아이폰 Safari는 iframe에 PDF를 제대로 못 띄워요)
+ * pdf.js 로 쪽마다 직접 그려요
+ */
+function ownPdfViewer() {
+  return !!window.AndroidBridge || navigator.pdfViewerEnabled === false || document.body.classList.contains('touch') || /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+}
+/** PDF 기본 화면 (계이름 보기가 아닐 때): iframe 또는 pdf.js 그림 */
+function showPdfBase() {
+  const own = ownPdfViewer();
+  $('#pdfFrame').hidden = own; $('#pdfView').hidden = !own;
+  if (own) renderPdfView();
+}
+async function renderPdfView() {
+  const view = $('#pdfView'), file = Pdf.file;
+  if (!file || view.dataset.for === Pdf.url) return;
+  view.dataset.for = Pdf.url; view.innerHTML = `<div class="pv-msg">${LG('PDF를 여는 중…', 'Opening the PDF…', 'PDFを開いています…')}</div>`;
+  try {
+    if (!window.pdfjsLib) throw new Error('pdf.js');
+    pdfjsLib.GlobalWorkerOptions.workerSrc = 'js/vendor/pdf.worker.min.js';
+    const doc = Pdf.doc || await pdfjsLib.getDocument({ data: new Uint8Array(await file.arrayBuffer()) }).promise;
+    if (Pdf.file !== file) return;                 // 그 사이 다른 파일을 열었으면 그만
+    Pdf.doc = doc;
+    view.innerHTML = '';
+    const cssW = Math.min(1100, Math.max(280, view.clientWidth - 16));
+    for (let n = 1; n <= doc.numPages; n++) {
+      const page = await doc.getPage(n);
+      const vp1 = page.getViewport({ scale: 1 });
+      // 화면 폭 × 화면 배율만큼 선명하게 (휴대폰 메모리를 생각해 가로 2000px까지)
+      const scale = Math.min(2000 / vp1.width, cssW * Math.min(3, window.devicePixelRatio || 1) / vp1.width);
+      const vp = page.getViewport({ scale });
+      const cv = document.createElement('canvas'); cv.width = Math.round(vp.width); cv.height = Math.round(vp.height);
+      view.appendChild(cv);
+      await page.render({ canvasContext: cv.getContext('2d'), viewport: vp }).promise;
+      if (Pdf.file !== file) return;
+    }
+  } catch (e) {
+    console.error(e);
+    view.dataset.for = '';
+    view.innerHTML = `<div class="pv-msg">${LG('PDF를 열 수 없어요. 파일이 손상됐거나 암호가 걸린 PDF일 수 있어요.', 'Cannot open the PDF. It may be damaged or password-protected.', 'PDFを開けません。破損しているかパスワード付きの可能性があります。')}</div>`;
+  }
+}
 function showPdf(file) {
   if (Pdf.url) URL.revokeObjectURL(Pdf.url);
   Pdf.file = file; Pdf.name = file.name; Pdf.omrXml = null; Pdf.omrLyr = null; Pdf.doc = null; Pdf.lay = null; Pdf.solOn = false; Pdf.canvases = null; Pdf.warned = false;
   Pdf.url = URL.createObjectURL(new Blob([file], { type: 'application/pdf' }));
   $('#pdfName').textContent = file.name;
-  $('#pdfFrame').hidden = false; $('#pdfFrame').src = Pdf.url + '#view=FitH';
+  // 휴대폰처럼 자동 인식이 안 되는 곳에서는 "자동 인식 · 계이름 넣기" 버튼을 숨겨요
+  document.body.classList.toggle('no-omr', !Native() && ownPdfViewer());
+  if (ownPdfViewer()) { $('#pdfFrame').src = 'about:blank'; } else $('#pdfFrame').src = Pdf.url + '#view=FitH';
+  $('#pdfView').innerHTML = ''; $('#pdfView').dataset.for = '';
   $('#pdfSolView').hidden = true; $('#pdfSolView').innerHTML = ''; $('#pdfSolBar').hidden = true;
   $('#btnPdfSol').textContent = '계이름 넣기';
   $('#pdfPanel').hidden = false;
   try { const w = localStorage.getItem('bflat.pdfw'); if (w) $('#pdfPanel').style.setProperty('--pdfw', w); } catch (e) { }
+  const noOmr = document.body.classList.contains('no-omr');
   if (App.blank) {
     // 첫 화면에서 연 PDF: "어떤 악보를 만들까요?" 창은 닫고 PDF만 크게 보여요
     App.pdfOnly = true; document.body.classList.add('pdf-only');
     App.onModalClose = null; $('#modalRoot').innerHTML = '';
-    toast('PDF 악보를 열었어요 · "계이름 넣기" = PDF 위에 계이름 · "자동 인식 → 악보로" = 고칠 수 있는 악보로', 4200);
-  } else toast('PDF를 옆에 띄웠어요 · 보면서 쓰거나, "계이름 넣기" / "자동 인식 → 악보로"를 눌러요', 3600);
+    toast(noOmr ? LG('PDF 악보를 열었어요 · 자동 인식(악보로 바꾸기)은 PC 프로그램에서 돼요', 'PDF opened · recognition into a score works in the PC program', 'PDF楽譜を開きました · 自動認識はPCのプログラムで使えます')
+      : 'PDF 악보를 열었어요 · "계이름 넣기" = PDF 위에 계이름 · "자동 인식 → 악보로" = 고칠 수 있는 악보로', 4200);
+  } else toast(noOmr ? LG('PDF를 띄웠어요 · 보면서 악보를 쓸 수 있어요 (✕ = 닫기)', 'PDF shown · copy it into your score (✕ = close)', 'PDFを表示しました · 見ながら楽譜を書けます (✕ = 閉じる)')
+    : 'PDF를 옆에 띄웠어요 · 보면서 쓰거나, "계이름 넣기" / "자동 인식 → 악보로"를 눌러요', 3600);
+  // 패널이 보인 다음에 그려야 폭이 맞아요
+  showPdfBase();
 }
 function leavePdfOnly() { App.pdfOnly = false; document.body.classList.remove('pdf-only'); }
 function closePdf() {
   $('#pdfPanel').hidden = true; $('#pdfFrame').src = 'about:blank';
+  $('#pdfView').innerHTML = ''; $('#pdfView').dataset.for = ''; $('#pdfView').hidden = true;
   if (Pdf.url) URL.revokeObjectURL(Pdf.url);
   Pdf.file = null; Pdf.url = null; Pdf.doc = null; Pdf.omrXml = null; Pdf.omrLyr = null; Pdf.solOn = false;
   $('#pdfSolView').innerHTML = ''; $('#pdfSolBar').hidden = true;
@@ -2345,7 +2397,7 @@ async function pdfSolfa() {
   Pdf.solStyle = Pdf.solStyle || 'ko';
   Pdf.solOn = true;
   $('#btnPdfSol').textContent = '원래 PDF 보기';
-  $('#pdfFrame').hidden = true;
+  $('#pdfFrame').hidden = true; $('#pdfView').hidden = true;
   $('#pdfSolView').hidden = false;
   buildPdfSolBar();
   await renderPdfPages();
@@ -2354,7 +2406,8 @@ async function pdfSolfa() {
 function pdfSolOff() {
   Pdf.solOn = false;
   $('#btnPdfSol').textContent = '계이름 넣기';
-  $('#pdfSolView').hidden = true; $('#pdfSolBar').hidden = true; $('#pdfFrame').hidden = false;
+  $('#pdfSolView').hidden = true; $('#pdfSolBar').hidden = true;
+  showPdfBase();
 }
 function buildPdfSolBar() {
   const bar = $('#pdfSolBar');
@@ -2571,6 +2624,7 @@ function placeMidiFromFile(f) {
   loadMidiFile(f, mi, App.selMeasures.length ? 0 : App.playStart.t);
 }
 async function openFile(file, nativePath) {
+  file = await withProperName(file);     // 휴대폰: 이름에 확장자가 없으면 내용으로 알아내요
   if (isScoreSource(file.name)) { openScoreSource(file); return; }
   try {
     const nm = file.name.toLowerCase();
@@ -2897,7 +2951,7 @@ function init() {
       onKey({ key: b.dataset.key, shiftKey: false, ctrlKey: false, metaKey: false, altKey: false, target: document.body, preventDefault() { }, stopPropagation() { } });
     });
     let hadZoom = false; try { hadZoom = !!localStorage.getItem('bflat.zoom'); } catch (e) { }
-    if (!hadZoom && innerWidth < 760) App.zoom = Math.max(.4, Math.floor((innerWidth - 12) / L.PW * 20) / 20);
+    if (!hadZoom && innerWidth < 760) App.zoom = Math.max(.3, Math.floor((innerWidth - 12) / L.PW * 100) / 100);
   }
   document.addEventListener('mousedown', e => { if (!e.__bflat && !e.target.closest('.pop')) closePop(); });
   $('#scroller').addEventListener('wheel', e => { if (e.ctrlKey) { e.preventDefault(); setZoom(App.zoom + (e.deltaY < 0 ? .1 : -.1)); } }, { passive: false });
