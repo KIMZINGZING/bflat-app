@@ -2160,7 +2160,9 @@ async function openScoreSource(file) {
   }
   showPdf(r.file);
   Pdf.srcName = r.srcName;
+  Pdf.space = r.space || null; Pdf.srcW = r.srcW || 0;      // 그림의 오선 간격 (너무 작으면 인식 전에 알려요)
   $('#pdfName').textContent = r.srcName;
+  if (Pdf.space && Pdf.space < OMR_MIN_SPACE) { toast(lowResText(), 7000); return; }
   toast(r.kind === 'hwp'
     ? LG(`한글 파일에서 악보 그림 ${r.pages}장을 찾았어요 · "자동 인식 → 악보로"를 눌러요`, `Found ${r.pages} score image(s) in the HWP file · press "Recognize → score"`, `HWPファイルから楽譜の画像を${r.pages}枚見つけました · 「自動認識 → 楽譜へ」を押してください`)
     : LG('사진을 열었어요 · "자동 인식 → 악보로"를 눌러요 (반듯하고 밝게 찍은 사진일수록 잘 읽어요)', 'Photo opened · press "Recognize → score" (straight, well-lit photos work best)', '写真を開きました · 「自動認識 → 楽譜へ」を押してください (まっすぐ明るく撮った写真ほどよく読めます)'), 5200);
@@ -2207,8 +2209,18 @@ async function renderPdfView() {
     view.innerHTML = `<div class="pv-msg">${LG('PDF를 열 수 없어요. 파일이 손상됐거나 암호가 걸린 PDF일 수 있어요.', 'Cannot open the PDF. It may be damaged or password-protected.', 'PDFを開けません。破損しているかパスワード付きの可能性があります。')}</div>`;
   }
 }
+/** 그림의 오선 간격이 이보다 좁으면 (원래 그림 픽셀) 자동 인식이 많이 틀려요
+ *  시험(같은 악보를 크기만 바꿔 인식): 9px 이상 = PDF와 똑같이 · 6.5px = 거의 맞음 · 4~5px = 마디·박자·가사가 무너짐 */
+const OMR_MIN_SPACE = 6;
+function lowResText() {
+  const sp = (Pdf.space || 0).toFixed(1), w = Pdf.srcW || '?';
+  return LG(`⚠ 사진이 너무 작아요 (가로 ${w}px · 오선 간격 약 ${sp}px). 이대로 자동 인식하면 음표·박자·가사를 많이 틀려요. 악보가 화면을 꽉 채우게 다시 찍은 사진(오선 간격 9px 이상)이나 원본 PDF를 쓰면 훨씬 잘 돼요.`,
+    `⚠ This image is too small (${w}px wide · staff spacing about ${sp}px). Recognition will get many notes, rhythms and lyrics wrong. A photo where the score fills the frame (staff spacing 9px+) or the original PDF works much better.`,
+    `⚠ 画像が小さすぎます (幅${w}px · 五線の間隔 約${sp}px)。このまま自動認識すると音符・拍・歌詞を多く間違えます。楽譜が画面いっぱいになるよう撮り直した写真(五線間隔9px以上)か元のPDFを使うとずっと良くなります。`);
+}
 function showPdf(file) {
   if (Pdf.url) URL.revokeObjectURL(Pdf.url);
+  Pdf.space = null; Pdf.srcW = 0;
   Pdf.file = file; Pdf.name = file.name; Pdf.omrXml = null; Pdf.omrLyr = null; Pdf.doc = null; Pdf.lay = null; Pdf.solOn = false; Pdf.canvases = null; Pdf.warned = false;
   Pdf.url = URL.createObjectURL(new Blob([file], { type: 'application/pdf' }));
   $('#pdfName').textContent = file.name;
@@ -2381,6 +2393,7 @@ async function pdfRecognize() {
   let lyrics = false;
   try { lyrics = localStorage.getItem('bflat.omrLyrics') === '1'; } catch (e) { }
   const ok = await new Promise(res => modal(`<h2>자동 인식 → 악보로</h2><p>PDF 속 음표를 읽어 <b>새 악보</b>로 열어요.${App.blank ? '' : ' 지금 악보는 되돌리기(Ctrl+Z)할 수 있지만, 따로 남기려면 먼저 저장하세요.'}</p>
+    ${Pdf.space && Pdf.space < OMR_MIN_SPACE ? `<p class="small" style="color:var(--red);font-weight:600" data-notr>${esc(lowResText())}</p>` : ''}
     <label class="omr-lyr"><input type="checkbox" id="omrLyr"${lyrics ? ' checked' : ''}> <b>가사도 함께 가져올까요?</b></label>
     <p class="muted small" style="margin-top:4px">가사가 있는 악보면 체크하세요. 가사를 읽어 음표 하나하나에 맞춰 넣어요 (시간이 조금 더 걸려요).</p>
     <p class="muted small">인쇄된 깨끗한 악보일수록 잘 읽어요. 셈여림표(f, p …)는 넣지 않아요. 틀린 음·박자는 옆의 PDF를 보면서 고쳐 주세요.</p>
