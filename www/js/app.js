@@ -3529,8 +3529,17 @@ function init() {
   const touch = !!window.AndroidBridge || (window.matchMedia && matchMedia('(pointer: coarse)').matches);
   if (touch) {
     document.body.classList.add('touch');
-    $('#touchPad').hidden = false;
+    // 패드 숨기기·보이기 (기억해 둬요) — 패드가 오른쪽 아래 악보를 가릴 때
+    const setPad = off => {
+      $('#touchPad').hidden = off; $('#touchPadShow').hidden = !off;
+      document.body.classList.toggle('pad-on', !off);
+      try { localStorage.setItem('bflat.padOff', off ? '1' : '0'); } catch (e) { }
+    };
+    let padOff = false; try { padOff = localStorage.getItem('bflat.padOff') === '1'; } catch (e) { }
+    setPad(padOff);
+    $('#touchPadShow').addEventListener('click', () => setPad(false));
     $('#touchPad').addEventListener('click', e => {
+      if (e.target.closest('[data-tp="hide"]')) { setPad(true); toast(LG('패드를 숨겼어요 · 오른쪽 아래 "▲▼ 패드"로 다시 열어요', 'Pad hidden · tap "▲▼ Pad" at the bottom right to show it', 'パッドを隠しました · 右下の「▲▼ パッド」で再表示')); return; }
       const b = e.target.closest('[data-key]'); if (!b) return;
       onKey({ key: b.dataset.key, shiftKey: false, ctrlKey: false, metaKey: false, altKey: false, target: document.body, preventDefault() { }, stopPropagation() { } });
     });
