@@ -236,6 +236,15 @@ body.writing #pages .page { cursor: crosshair; }
 /* 설정: 휴대폰 앱 업데이트 */
 .pub-steps { margin: 0 0 12px; padding-left: 20px; line-height: 1.7; }
 .pub-steps a, [data-link] { color: var(--blue); }
+/* 휴대폰 → PC 자동 인식 연결 */
+.pl-box { border: 1px solid var(--line, #d5dbe3); border-radius: 10px; padding: 10px 12px; margin-bottom: 6px; }
+.pl-box .chk { margin: 4px 0 6px; }
+.pl-code { display: flex; align-items: center; gap: 10px; font-size: 14px; margin: 2px 0 4px; }
+.pl-code b { font-size: 24px; letter-spacing: 3px; font-variant-numeric: tabular-nums; }
+.pc-found { display: flex; flex-direction: column; gap: 6px; margin: 4px 0 10px; }
+.pc-item { justify-content: flex-start; gap: 8px; text-align: left; }
+.pc-item.on { border-color: var(--blue); box-shadow: 0 0 0 2px color-mix(in srgb, var(--blue) 30%, transparent); }
+#pcCode { letter-spacing: 3px; font-variant-numeric: tabular-nums; }
 .pub-status { display: flex; flex-direction: column; gap: 3px; margin: 6px 0 8px; word-break: break-all; }
 /* 설정: 언어 */
 .lang-sw { font-size: 18px; font-weight: 700; }
