@@ -1,6 +1,6 @@
 {
- "version": "a308a7308d0e",
- "built": "2026-11-25 18:40",
+ "version": "9e85f8b6d830",
+ "built": "2026-11-25 20:21",
  "files": {
   "assets/apple-touch-icon.png": {
    "sha256": "e9aca0c2fe30a5f6300661decbd1d578c00c7c0cead84b40374e696224d6712f",
@@ -39,8 +39,8 @@
    "size": 5067
   },
   "js/app.js": {
-   "sha256": "9e9aea9f664eac8cc83b67d5be08b04333af677a1365d81372c58d30eaf6c8c6",
-   "size": 279168
+   "sha256": "cbed334654ec2a9905b703f0f91419c6998d9c631094ebff9c0558c8088b06b4",
+   "size": 287864
   },
   "js/audio.js": {
    "sha256": "1197d4458b423279714557c5e262103ef2e32ffd81672718c5a8a4d6a4eb69dc",
@@ -95,7 +95,7 @@
   "versionCode": 3,
   "versionName": "1.2",
   "path": "BFlatStudio.apk",
-  "sha256": "af1a8a91031c3ed1d7daf148693ebf3258b810f1ceb3c0e6488dedf7996fe83f",
-  "size": 1906845
+  "sha256": "3d6bf9f865833d18c9611680296d4e9a0cbbd32a37f34524c28388091a798aba",
+  "size": 1910941
  }
 }
