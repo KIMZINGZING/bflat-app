@@ -193,7 +193,7 @@ body.writing #pages .page { cursor: crosshair; }
 .muted { color: var(--muted); font-size: 14px; }
 .muted a { color: var(--blue); font-weight: 700; text-decoration: none; }
 .chk { display: flex; align-items: center; gap: 8px; margin: 6px 0 14px; font-size: 14px; }
-.modal-btns { display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px; }
+.modal-btns { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
 .sc table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
 .sc th { text-align: left; width: 36%; padding: 5px 8px; background: var(--sub); border-bottom: 1px solid var(--line); font-weight: 400; color: var(--ink2); vertical-align: top; }
 .sc td { padding: 5px 8px; border-bottom: 1px solid var(--line); color: var(--ink2); }
@@ -284,6 +284,8 @@ body.writing #pages .page { cursor: crosshair; }
 .omr-lyr { display: flex; align-items: center; gap: 10px; margin-top: 12px; padding: 10px 12px; border: 1.5px solid var(--line2); border-radius: 10px; cursor: pointer; background: var(--card); }
 .omr-lyr:has(input:checked) { border-color: var(--blue); background: var(--blue-l); }
 .omr-lyr input { width: 18px; height: 18px; accent-color: var(--blue); }
+.omr-songs { margin: 10px 0 10px 22px; max-height: 40vh; overflow: auto; }
+.omr-songs li { margin: 4px 0; line-height: 1.45; }
 .clef-opt b { font-size: 16px; }
 .clef-row { display: flex; gap: 8px; margin: 2px 0 10px; }
 .clef-opt { flex: 1; display: flex; align-items: center; justify-content: center; gap: 8px; padding: 8px 6px; border: 1.5px solid var(--line2); border-radius: 10px; background: var(--card); color: var(--ink); cursor: pointer; font-size: 14px; }
