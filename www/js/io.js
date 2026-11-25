@@ -740,6 +740,91 @@ function omrAddMarks(text, marks) {
   return new XMLSerializer().serializeToString(doc);
 }
 /**
+ * 자동 인식 결과(PDF 전체 = MusicXML 하나)를 곡마다 나누기 — 찬송가 책처럼 여러 곡이 든 PDF용
+ *  곡 나눔 = 새 쪽의 첫 마디에 박자표·조표가 새로 적힌 곳 (한 곡이 여러 쪽이면 쪽 첫머리에 박자표를 다시 안 적어요.
+ *            시험: 「더쇼」 6쪽 · 「왕벌의 비행」 7쪽은 0번 · 찬송가 3곡 PDF는 2번 = 정확히 곡 경계)
+ *  곡 이름 = 그 곡 첫 쪽 위쪽에서 가장 큰 글자 (글자 인식이 읽은 것 · 못 읽었으면 '')
+ *  돌려주는 값: [{xml, title, pages: [첫 쪽, 끝 쪽], measures}] (1곡이면 원래 xml 그대로 하나)
+ */
+function omrSplitSongs(text) {
+  const doc = new DOMParser().parseFromString(text, 'application/xml');
+  if (doc.querySelector('parsererror')) return [{ xml: text, title: '', pages: [1, 1], measures: 0 }];
+  const root = doc.documentElement;
+  const kids = (el, tag) => el ? [...el.children].filter(c => c.tagName === tag) : [];
+  const parts = kids(root, 'part');
+  if (!parts.length) return [{ xml: text, title: '', pages: [1, 1], measures: 0 }];
+  const meas = parts.map(p => kids(p, 'measure'));
+  const nM = Math.min(...meas.map(m => m.length));
+  const pageOf = []; let pg = 1;
+  for (let i = 0; i < nM; i++) {
+    const pr = kids(meas[0][i], 'print')[0];
+    if (i > 0 && pr && pr.getAttribute('new-page') === 'yes') pg++;
+    pageOf.push(pg);
+  }
+  const starts = [0];
+  for (let i = 1; i < nM; i++) {
+    if (pageOf[i] === pageOf[i - 1]) continue;
+    const fresh = meas.some(ms => kids(ms[i], 'attributes').some(a => kids(a, 'time').length || kids(a, 'key').length));
+    if (fresh) starts.push(i);
+  }
+  // 쪽마다 제목 후보 (글자 인식 결과 · credit)
+  const pageH = parseFloat((root.querySelector('defaults page-layout page-height') || {}).textContent) || 0;
+  const CH = /^[A-G][#♯b♭]?(m|maj|min|dim|aug|sus)?\d*(\/[A-G][#♯b♭]?)?[,.]?$/;
+  const titleOf = p => {
+    const ws = [];
+    kids(root, 'credit').filter(c => (+c.getAttribute('page') || 1) === p).forEach(c => kids(c, 'credit-words').forEach(w => {
+      ws.push({ t: w.textContent.trim(), size: parseFloat(w.getAttribute('font-size')) || 0, y: parseFloat(w.getAttribute('default-y')) || 0 });
+    }));
+    if (!ws.length) return '';
+    const sizes = ws.map(w => w.size).sort((a, b) => a - b), med = sizes[Math.floor(sizes.length / 2)] || 0;
+    const cand = ws.filter(w => !CH.test(w.t) && (w.t.match(/[가-힣]/g) || []).length + (w.t.match(/[A-Za-z]/g) || []).length >= 3
+      && (!pageH || w.y >= pageH * 0.7) && !/^[\[【(].*[\]】)]$/.test(w.t))
+      .sort((a, b) => b.size - a.size)[0];
+    if (!cand || cand.size < med * 1.5) return '';
+    // 글자 인식 부스러기 정리: 한글 낱말에 붙은 영문·숫자 조각("x1주신책" → "주신책"), 이상한 기호
+    let t = cand.t.replace(/[A-Za-z0-9]+(?=[가-힣])|(?<=[가-힣])[A-Za-z0-9]+/g, '').replace(/[^가-힣A-Za-z0-9 '’!?,.\-]/g, ' ').replace(/\s+/g, ' ').trim();
+    return t.length >= 2 ? t : '';
+  };
+  const songs = starts.map((a, k) => {
+    const b = k + 1 < starts.length ? starts[k + 1] : nM;
+    return { a, b, pages: [pageOf[a], pageOf[b - 1]], measures: b - a, title: titleOf(pageOf[a]) };
+  });
+  if (songs.length < 2) return [{ xml: text, title: songs[0] ? songs[0].title : '', pages: [1, pg], measures: nM }];
+  // 곡마다 MusicXML 만들기: 그 곡 마디만 남기고, 첫 마디에 그때까지의 박자·조·음자리표를 모두 적어요
+  return songs.map(sg => {
+    const d2 = doc.cloneNode(true), r2 = d2.documentElement;
+    kids(r2, 'part').forEach(p => {
+      const ms = kids(p, 'measure');
+      const state = {};                       // divisions · key · time · staves · clef(번호마다)
+      ms.slice(0, sg.a + 1).forEach(me => kids(me, 'attributes').forEach(at => [...at.children].forEach(ch => {
+        const k = ch.tagName === 'clef' ? 'clef' + (ch.getAttribute('number') || '1') : ch.tagName;
+        state[k] = ch;
+      })));
+      ms.forEach((me, i) => { if (i < sg.a || i >= sg.b) me.remove(); });
+      const first = ms[sg.a]; if (!first) return;
+      const at = d2.createElement('attributes');
+      const order = ['divisions', 'key', 'time', 'staves'];
+      order.forEach(k => { if (state[k]) at.appendChild(state[k].cloneNode(true)); });
+      Object.keys(state).filter(k => /^clef/.test(k)).sort().forEach(k => at.appendChild(state[k].cloneNode(true)));
+      kids(first, 'attributes').forEach((old, j) => { if (j === 0) old.replaceWith(at); });
+      if (!kids(first, 'attributes').length && at.children.length) first.insertBefore(at, kids(first, 'print')[0] ? kids(first, 'print')[0].nextSibling : first.firstChild);
+      const pr = kids(first, 'print')[0]; if (pr) pr.removeAttribute('new-page');
+    });
+    // 이 곡 쪽의 글자(credit)만 남기고 쪽 번호를 1부터
+    kids(r2, 'credit').forEach(c => {
+      const p = +c.getAttribute('page') || 1;
+      if (p < sg.pages[0] || p > sg.pages[1]) c.remove(); else c.setAttribute('page', String(p - sg.pages[0] + 1));
+    });
+    // 곡 이름
+    kids(r2, 'work').forEach(w => w.remove()); kids(r2, 'movement-title').forEach(w => w.remove());
+    if (sg.title) {
+      const w = d2.createElement('work'), wt = d2.createElement('work-title'); wt.textContent = sg.title; w.appendChild(wt);
+      r2.insertBefore(w, r2.firstElementChild);
+    }
+    return { xml: new XMLSerializer().serializeToString(d2), title: sg.title, pages: sg.pages, measures: sg.measures };
+  });
+}
+/**
  * 자동 인식 결과를 "악보로" 열기 전에 한 번 더 다듬기 (PDF 위 계이름 자리 계산에는 안 써요)
  *  - 셈여림표(f, p …)는 빼요 (나중에 따로 넣을 거라서)
  *  - 가사를 안 가져오기로 했으면 가사도 빼요 · 글자 인식에서 나온 엉뚱한 글자(워터마크 등)도 빼요
