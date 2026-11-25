@@ -344,6 +344,24 @@ function importMusicXML(text) {
     return durT;
   };
 
+  /**
+   * 한 오선에 성부가 둘 이상이면 "주 성부"(마디 박자를 세고 가사를 다는 성부) 고르기:
+   * 처음 나온 성부가 아니라 음표 길이를 다 더한 값이 가장 긴 성부 (같으면 먼저 나온 것)
+   * — 자동 인식이 아래 성부 하나를 짧게 읽으면, 그게 먼저 나왔다는 이유로 주 성부가 돼서 마디 전체가 박자 오류로 보였어요
+   */
+  const mainVoices = (me, pi) => {
+    const tot = {}, order = [];
+    [...me.children].forEach(el => {
+      if (el.tagName !== 'note' || q(el, 'chord') || q(el, 'grace')) return;
+      const si = base[pi] + Math.max(0, (+txt(el, 'staff', '1') || 1) - 1), v = txt(el, 'voice', '1'), k = si + '|' + v;
+      if (!(k in tot)) { tot[k] = 0; order.push(k); }
+      tot[k] += +txt(el, 'duration', 0) || 0;
+    });
+    const best = {};
+    order.forEach(k => { const [si, v] = k.split('|'); if (!(si in best) || tot[k] > tot[si + '|' + best[si]]) best[si] = v; });
+    return best;
+  };
+
   // 1) 첫 파트: 마디 정보 + 음표
   let div = 1, lineCount = 0;
   [...parts[0].querySelectorAll(':scope > measure')].forEach((me, idx) => {
@@ -352,7 +370,7 @@ function importMusicXML(text) {
     if (idx > 0 && pr && (pr.getAttribute('new-system') === 'yes' || pr.getAttribute('new-page') === 'yes')) { s.lines.push(lineCount); lineCount = 0; }
     lineCount++;
     if (me.getAttribute('implicit') === 'yes' && idx === 0) m.pickup = true;
-    const st = { voice: {}, last: {}, sylls: {} };
+    const st = { voice: mainVoices(me, 0), last: {}, sylls: {} };
     let t = 0;
     [...me.children].forEach(el => {
       const tag = el.tagName;
@@ -435,7 +453,7 @@ function importMusicXML(text) {
     let pdiv = 1;
     [...pt.querySelectorAll(':scope > measure')].forEach((me, idx) => {
       const m = s.measures[idx]; if (!m) return;
-      const st = { voice: {}, last: {}, sylls: {} };
+      const st = { voice: mainVoices(me, pi), last: {}, sylls: {} };
       let pt2 = 0;
       [...me.children].forEach(el => {
         if (el.tagName === 'attributes') pdiv = +txt(el, 'divisions', pdiv);
