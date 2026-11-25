@@ -1882,10 +1882,13 @@ function settingsDialog(tab) {
  */
 async function phonePane(el) {
   const api = Native();
-  if (!api || !api.publish_status) { el.innerHTML = `<p class="muted">휴대폰 앱 업데이트 올리기는 바탕화면 프로그램에서만 돼요.</p>`; return; }
+  if (!api || !api.publish_status) {
+    mobileOmrPane(el); return;     // 휴대폰(앱·웹): 밖에서 자동 인식(클라우드) · 집 PC와 연결
+  }
   const st = await api.publish_status();
   const link = (url, text) => `<a href="#" data-link="${url}">${text}</a>`;
-  el.innerHTML = `
+  el.innerHTML = `<div id="plBox"></div><div id="cloudBox" style="margin-top:12px"></div>
+  <h3 style="margin:14px 0 4px">${LG('휴대폰 앱 자동 업데이트', 'Phone app auto-update', 'スマホアプリの自動更新')}</h3>
   <p class="muted small" style="margin-top:0">PC 프로그램을 업데이트하면 휴대폰 앱도 켤 때 자동으로 최신 버전이 돼요. 무료 GitHub 저장소 하나에 업데이트 파일을 올려 두고, 휴대폰 앱이 거기서 받아요. <b>처음 한 번만</b> 설정해요.</p>
   <ol class="pub-steps small">
     <li>${link('https://github.com/signup', 'GitHub 가입')} (이미 있으면 건너뛰기)</li>
@@ -1905,6 +1908,8 @@ async function phonePane(el) {
     ${st.url ? `<div>휴대폰 앱이 보는 주소: <span data-notr>${esc(st.url)}/update.json</span></div>` : ''}
   </div>
   <p class="muted small">토큰은 이 PC에만, 윈도우 계정으로 암호화해서 저장해요. 설정을 마친 다음 만든 APK부터 자동 업데이트가 켜져요 (APK 만들기.bat).</p>`;
+  phoneLinkBox($('#plBox', el));
+  cloudPcBox($('#cloudBox', el));
   $$('[data-link]', el).forEach(a => a.addEventListener('click', e => { e.preventDefault(); api.open_url(a.dataset.link); }));
   const cp = $('#pCopy', el); if (cp) cp.addEventListener('click', async () => { try { await navigator.clipboard.writeText(st.pages); cp.textContent = '✓'; } catch (e) { prompt('', st.pages); } });
   const msg = (t, bad) => { const m = $('#pMsg', el); m.textContent = t; m.style.color = bad ? '#dc2626' : ''; };
@@ -2207,7 +2212,7 @@ function showPdf(file) {
   Pdf.url = URL.createObjectURL(new Blob([file], { type: 'application/pdf' }));
   $('#pdfName').textContent = file.name;
   // 휴대폰처럼 자동 인식이 안 되는 곳에서는 "자동 인식 · 계이름 넣기" 버튼을 숨겨요
-  document.body.classList.toggle('no-omr', !Native() && ownPdfViewer());
+  document.body.classList.toggle('no-omr', !OmrApi() && ownPdfViewer());
   if (ownPdfViewer()) { $('#pdfFrame').src = 'about:blank'; } else $('#pdfFrame').src = Pdf.url + '#view=FitH';
   $('#pdfView').innerHTML = ''; $('#pdfView').dataset.for = '';
   $('#pdfSolView').hidden = true; $('#pdfSolView').innerHTML = ''; $('#pdfSolBar').hidden = true;
@@ -2242,13 +2247,26 @@ async function getOmrXml(want) {
   if (!Pdf.file) { toast('먼저 PDF 악보를 여세요'); return null; }
   if (want.lyrics ? Pdf.omrLyr : Pdf.omrXml) return want.lyrics ? Pdf.omrLyr : Pdf.omrXml;
   if (!want.lyrics && Pdf.omrLyr) return Pdf.omrLyr;
-  const api = Native();
+  const api = OmrApi();
   if (!api || !api.omr_status) { modal(`<h2>자동 인식</h2><p>자동 인식은 <b>바탕화면 프로그램</b>(BFlat Studio)에서만 돼요. 브라우저에서는 PDF를 옆에 띄워 보면서 쓸 수 있어요.</p><div class="modal-btns"><button class="btn primary" data-close>확인</button></div>`); return null; }
   const st = await api.omr_status();
+  if (st && st.cancel) return null;           // 휴대폰: PC 연결을 취소했어요
   if (!st || !st.ok) { omrInstallHelp(); return null; }
-  $('#pdfBusy').hidden = false;
+  const remote = api === MobileOmr, busy = $('#pdfBusy');
+  if (remote) {
+    const cloud = MobileOmr.mode === 'cloud';
+    busy.querySelector('b').textContent = cloud ? LG('☁ 클라우드에서 악보 인식 중…', '☁ Recognizing in the cloud…', '☁ クラウドで楽譜を認識中…') : LG('PC에서 악보 인식 중…', 'Recognizing on the PC…', 'PCで楽譜を認識中…');
+    busy.querySelector('span').textContent = cloud ? LG('보내는 중…', 'Sending…', '送信中…') : LG('페이지 수에 따라 몇 분 걸릴 수 있어요 · 앱을 닫지 말고 기다려 주세요', 'This can take a few minutes depending on pages · keep the app open', 'ページ数によって数分かかります · アプリを閉じずにお待ちください');
+  }
+  busy.hidden = false;
   try {
     const res = await api.omr_pdf(await blobToB64(Pdf.file), Pdf.name, !!want.lyrics);
+    if (remote && res && (['net', 'timeout', 'http', 'lost', 'code', 'blocked'].includes(res.error) || /^cloud/.test(res.error || ''))) {
+      if (res.error !== 'timeout') PcLink.okAt = 0;
+      const cloud = /^cloud/.test(res.error);
+      modal(`<h2>${cloud ? LG('클라우드 인식이 안 됐어요', 'Cloud recognition failed', 'クラウド認識に失敗しました') : LG('PC와 연결이 안 됐어요', 'Lost the PC link', 'PCとの接続に失敗しました')}</h2><p>${esc(MobileOmr.errText(res))}</p><div class="modal-btns"><button class="btn primary" data-close>${LG('확인', 'OK', 'OK')}</button></div>`);
+      return null;
+    }
     if (!res || res.error) {
       modal(`<h2>자동 인식이 안 됐어요</h2><p>${res && res.error === 'notfound' ? 'Audiveris를 찾지 못했어요.' : '이 PDF에서 악보를 읽지 못했어요. 스캔이 흐리거나 손글씨면 잘 안 될 수 있어요.'}</p>${res && res.log ? `<pre class="omr-log">${esc(res.log)}</pre>` : ''}<div class="modal-btns"><button class="btn primary" data-close>확인</button></div>`, null, 'wide');
       return null;
@@ -2261,7 +2279,10 @@ async function getOmrXml(want) {
     if (res.lyrics) Pdf.omrLyr = xml; else Pdf.omrXml = xml;
     Pdf.omrCount = res.count || 1;
     return xml;
-  } finally { $('#pdfBusy').hidden = true; }
+  } finally {
+    busy.hidden = true;
+    if (remote) { busy.querySelector('b').textContent = '악보 인식 중…'; busy.querySelector('span').textContent = '페이지 수에 따라 몇 분 걸릴 수 있어요'; }
+  }
 }
 /**
  * PDF 첫 쪽 첫 오선 위에 스윙 표시(♫ = ♩♪³)가 있는지 그림으로 찾기
@@ -2332,12 +2353,14 @@ async function detectSwing(file) {
 }
 /** 가사 읽기에 필요한 글자 인식 데이터 (처음 한 번만 받아요) */
 async function ensureOcr() {
-  const api = Native();
+  const api = OmrApi();
   const st = await api.omr_status();
+  if (st && st.cancel) return null;            // 휴대폰: PC 연결을 취소했어요 → 인식도 그만
   if (st && st.ocr && st.ocr.length) return true;
+  const remote = api === MobileOmr;
   const go = await new Promise(res => modal(`<h2>가사 인식 준비</h2>
     <p>가사(글자)를 읽으려면 <b>글자 인식 데이터</b>(영어·한글, 약 40MB)가 필요해요. 처음 한 번만 받으면 다음부터는 바로 돼요.</p>
-    <p class="muted small">받는 곳: Tesseract OCR 공식 저장소 (github.com/tesseract-ocr/tessdata) · 이 PC의 BFlat Studio 폴더에만 저장해요.</p>
+    <p class="muted small">${remote ? LG('받는 곳: Tesseract OCR 공식 저장소 (github.com/tesseract-ocr/tessdata) · 휴대폰이 아니라 <b>연결한 PC</b>의 BFlat Studio 폴더에 받아요.', 'Source: the official Tesseract OCR repository (github.com/tesseract-ocr/tessdata) · it is saved on the <b>connected PC</b>, not the phone.', '取得元: Tesseract OCR 公式リポジトリ (github.com/tesseract-ocr/tessdata) · スマホではなく<b>接続したPC</b>に保存します。') : '받는 곳: Tesseract OCR 공식 저장소 (github.com/tesseract-ocr/tessdata) · 이 PC의 BFlat Studio 폴더에만 저장해요.'}</p>
     <div class="modal-btns"><button class="btn" data-close>가사 없이 인식</button><button class="btn primary" data-ok>받고 시작</button></div>`, md => {
       md.querySelector('[data-ok]').addEventListener('click', () => { App.onModalClose = null; closeModal(); res(true); });
       App.onModalClose = () => res(false);
@@ -2369,8 +2392,8 @@ async function pdfRecognize() {
     }));
   if (!ok) return;
   try { localStorage.setItem('bflat.omrLyrics', lyrics ? '1' : '0'); } catch (e) { }
-  const api = Native();
-  if (lyrics && api && api.ocr_install && !(await ensureOcr())) lyrics = false;
+  const api = OmrApi();
+  if (lyrics && api && api.ocr_install) { const o = await ensureOcr(); if (o === null) return; if (!o) lyrics = false; }
   const raw = await getOmrXml({ lyrics }); if (!raw) return;
   let xml = raw;
   try { xml = omrForImport(raw, { lyrics }); } catch (e) { console.error(e); }
@@ -2589,12 +2612,396 @@ function pdfSolPrint() {
   setTimeout(() => printNow(() => document.body.classList.remove('print-pdfsol')), 50);
 }
 function omrInstallHelp() {
+  if (!Native() && window.AndroidBridge) {   // 휴대폰: 연결한 PC에 Audiveris가 없어요
+    const pc = PcLink.get() || {};
+    modal(`<h2>${LG('PC에 자동 인식 프로그램이 필요해요', 'The PC needs the recognition program', 'PCに自動認識プログラムが必要です')}</h2>
+    <p>${LG(`연결한 PC(<b data-notr>${esc(pc.name || pc.host || '')}</b>)에 무료 악보 인식 프로그램 <b>Audiveris</b>가 없어요.`, `The connected PC (<b data-notr>${esc(pc.name || pc.host || '')}</b>) does not have the free recognition program <b>Audiveris</b>.`, `接続したPC(<b data-notr>${esc(pc.name || pc.host || '')}</b>)に無料の楽譜認識プログラム <b>Audiveris</b> がありません。`)}</p>
+    <ul class="help-list"><li>${LG('PC에서 BFlat Studio의 "자동 인식"을 한 번 눌러 보면 설치 안내가 나와요 (github.com/Audiveris/audiveris → Windows .msi).', 'On the PC, press "Recognize" in BFlat Studio once to see the install guide (github.com/Audiveris/audiveris → Windows .msi).', 'PCのBFlat Studioで「自動認識」を一度押すとインストール案内が出ます (github.com/Audiveris/audiveris → Windows .msi)。')}</li>
+    <li>${LG('설치한 다음 PC의 BFlat Studio를 다시 켜고, 휴대폰에서 다시 눌러 주세요.', 'After installing, restart BFlat Studio on the PC and try again on the phone.', 'インストール後、PCのBFlat Studioを再起動してからスマホでもう一度押してください。')}</li></ul>
+    <div class="modal-btns"><button class="btn primary" data-close>${LG('확인', 'OK', 'OK')}</button></div>`);
+    return;
+  }
   modal(`<h2>자동 인식 프로그램이 필요해요</h2>
   <p>PDF 속 음표를 읽으려면 무료 악보 인식 프로그램 <b>Audiveris</b>가 이 PC에 설치돼 있어야 해요.</p>
   <ul class="help-list"><li>공식 페이지에서 Windows 설치 파일(.msi, 약 85MB)을 받아 설치해요. Java는 함께 들어 있어요.</li><li>설치한 다음 BFlat Studio를 다시 켜면 "자동 인식"이 돼요.</li></ul>
   <div class="modal-btns"><button class="btn" data-close>닫기</button><button class="btn primary" id="omrPage">공식 다운로드 페이지 열기</button></div>`, md => {
     $('#omrPage', md).addEventListener('click', () => { const api = Native(); if (api && api.open_url) api.open_url('https://github.com/Audiveris/audiveris/releases/latest'); else window.open('https://github.com/Audiveris/audiveris/releases/latest', '_blank'); });
   });
+}
+/* ---------- 안드로이드 앱 → 같은 와이파이의 PC로 자동 인식 맡기기 ----------
+ * 휴대폰에서는 Audiveris(자바 데스크톱 프로그램)가 돌아가지 않아요 → PC에서 켜 둔 BFlat Studio가 대신 인식해요.
+ * PC: phonelink.py · 앱: PcLink.java (AndroidBridge.pcFind / pcCall / pcTake)
+ * 아래 MobileOmr 는 PC 프로그램의 omr_status · omr_pdf · ocr_install 과 똑같이 생겨서, 인식 다음 과정(가사·세뇨/코다·스윙·계이름)은 PC와 똑같이 돌아요. */
+function OmrApi() {
+  const n = Native(); if (n && n.omr_status) return n;
+  return window.AndroidBridge || CloudOmr.get() ? MobileOmr : null;
+}
+const PcLink = {
+  n: 0, wait: {}, okAt: 0,
+  ready() { return !!(window.AndroidBridge && AndroidBridge.pcCall && AndroidBridge.pcFind && AndroidBridge.pcTake); },
+  get() { try { const p = JSON.parse(localStorage.getItem('bflat.pcLink') || 'null'); return p && p.host && p.code ? p : null; } catch (e) { return null; } },
+  set(p) { this.okAt = 0; try { if (p) localStorage.setItem('bflat.pcLink', JSON.stringify(p)); else localStorage.removeItem('bflat.pcLink'); } catch (e) { } },
+  bridge(start) {
+    const id = 'pc' + Date.now().toString(36) + '_' + (++this.n);
+    return new Promise(res => { this.wait[id] = res; try { start(id); } catch (e) { delete this.wait[id]; res({ error: 'net', message: String(e) }); } });
+  },
+  find() { return this.bridge(id => AndroidBridge.pcFind(id)).then(r => Array.isArray(r) ? r : []); },
+  call(pc, m, args) { return this.bridge(id => AndroidBridge.pcCall(id, pc.host, pc.port || 47390, pc.code || '', m, JSON.stringify(args || []))); },
+  awake(on) { try { if (AndroidBridge.keepAwake) AndroidBridge.keepAwake(!!on); } catch (e) { } },
+  errText(r) {
+    const e = r && r.error;
+    if (e === 'code') return LG('연결 번호가 맞지 않아요 · PC 화면의 ⚙ 설정 → 휴대폰 앱 에 나오는 6자리를 넣어 주세요', 'The link code is wrong · enter the 6 digits shown on the PC under ⚙ Settings → Phone app', '接続番号が違います · PCの ⚙ 設定 → スマホアプリ に出る6桁を入れてください');
+    if (e === 'blocked') return LG(`번호를 여러 번 틀려서 잠시 막혔어요 · ${Math.ceil((r.wait || 600) / 60)}분 뒤에 다시 해 주세요`, `Too many wrong codes · try again in ${Math.ceil((r.wait || 600) / 60)} min`, `番号を何度も間違えたため一時的にブロックされました · ${Math.ceil((r.wait || 600) / 60)}分後に再度お試しください`);
+    if (e === 'timeout') return LG('PC가 너무 오래 대답하지 않아요 · PC가 잠자기로 들어갔거나 와이파이가 끊겼을 수 있어요', 'The PC took too long to answer · it may have gone to sleep or Wi-Fi dropped', 'PCの応答が長すぎます · スリープしたかWi-Fiが切れた可能性があります');
+    if (e === 'net' || e === 'http' || e === 'lost') return LG('PC에 연결하지 못했어요 · ① PC에서 BFlat Studio가 켜져 있는지 ② 휴대폰과 PC가 같은 와이파이(공유기)인지 ③ PC의 Windows 방화벽에서 BFlat Studio를 "허용"했는지 확인해 주세요', 'Could not reach the PC · check that ① BFlat Studio is running on the PC ② the phone and PC are on the same Wi-Fi ③ Windows Firewall on the PC allows BFlat Studio', 'PCに接続できません · ① PCでBFlat Studioが起動しているか ② スマホとPCが同じWi-Fiか ③ PCのWindowsファイアウォールでBFlat Studioを「許可」したか確認してください');
+    return LG('PC에서 처리하지 못했어요', 'The PC could not do it', 'PCで処理できませんでした') + (e ? ` (${e})` : '');
+  },
+  /** 쓸 수 있는 PC (저장해 둔 PC가 대답하면 그대로 · 주소가 바뀌었으면 같은 이름의 PC를 다시 찾아요 · 안 되면 연결 창) */
+  async ensure() {
+    if (!this.ready()) { pcAppTooOld(); return null; }
+    const pc = this.get();
+    if (!pc) return pcConnectDialog();
+    if (Date.now() - this.okAt < 60000) return pc;
+    let r = await this.call(pc, 'ping');
+    if (r && r.ok) { this.okAt = Date.now(); return pc; }
+    if (r && (r.error === 'net' || r.error === 'timeout')) {
+      toast(LG('PC를 찾는 중…', 'Looking for the PC…', 'PCを探しています…'), 8000);
+      const same = (await this.find()).find(x => x.name && x.name === pc.name);
+      if (same) {
+        const p2 = Object.assign({}, pc, { host: same.host, port: same.port });
+        r = await this.call(p2, 'ping');
+        if (r && r.ok) { this.set(p2); this.okAt = Date.now(); toast(LG('PC와 다시 연결했어요', 'Reconnected to the PC', 'PCに再接続しました')); return p2; }
+      }
+    }
+    return pcConnectDialog(this.errText(r));
+  },
+  /** 저장해 둔 PC가 지금 대답하나 (밖이면 금방 실패해요) */
+  async alive(pc) { if (Date.now() - this.okAt < 60000) return true; const r = await this.call(pc, 'ping'); if (r && r.ok) { this.okAt = Date.now(); return true; } return false; },
+};
+/* ---------- 밖에서 자동 인식: 클라우드 (내 비공개 GitHub 저장소 + GitHub Actions 무료 서버 · PC가 꺼져 있어도 돼요) ----------
+ * inbox/<id>.pdf 올리기 → GitHub 서버가 PC와 같은 Audiveris로 인식 (omr/omrjob.py) → outbox/<id>.json 가져오기 → 치우기
+ * 연결 코드는 PC 프로그램 설정 → 휴대폰 앱 → 밖에서 자동 인식 에서 만들어요. 휴대폰 데이터·와이파이만 있으면 어디서나 돼요. */
+const CloudOmr = {
+  get() { try { const c = JSON.parse(localStorage.getItem('bflat.cloudOmr') || 'null'); return c && c.o && c.r && c.t ? c : null; } catch (e) { return null; } },
+  set(c) { try { if (c) localStorage.setItem('bflat.cloudOmr', JSON.stringify(c)); else localStorage.removeItem('bflat.cloudOmr'); } catch (e) { } },
+  parse(code) {
+    const m = /BFLAT1:([A-Za-z0-9_-]+)/.exec(String(code || '').replace(/\s+/g, ''));
+    if (!m) return null;
+    try {
+      const s = atob(m[1].replace(/-/g, '+').replace(/_/g, '/') + '==='.slice((m[1].length + 3) % 4));
+      const c = JSON.parse(decodeURIComponent(escape(s)));
+      return c && c.o && c.r && c.t ? { o: c.o, r: c.r, t: c.t } : null;
+    } catch (e) { return null; }
+  },
+  async gh(c, method, path, body, raw) {
+    let res;
+    try {
+      res = await fetch(`https://api.github.com/repos/${encodeURIComponent(c.o)}/${encodeURIComponent(c.r)}${path}`, {
+        method, cache: 'no-store',
+        headers: { Authorization: 'Bearer ' + c.t, Accept: raw ? 'application/vnd.github.raw+json' : 'application/vnd.github+json', 'X-GitHub-Api-Version': '2022-11-28' },
+        body: body ? JSON.stringify(body) : undefined });
+    } catch (e) { return { status: 0 }; }
+    let data = null; try { data = raw ? await res.text() : await res.json(); } catch (e) { }
+    return { status: res.status, data };
+  },
+  err(status) { return status === 0 ? 'cloudnet' : status === 401 ? 'cloud401' : status === 403 || status === 404 ? 'cloud404' : 'cloudhttp'; },
+  /** 연결 확인: 저장소가 있고 비공개이고 올릴 수 있는지 */
+  async check(c) {
+    const r = await this.gh(c, 'GET', '');
+    if (r.status !== 200) return { error: this.err(r.status) };
+    if (!r.data.private) return { error: 'cloudpublic' };
+    if (!(r.data.permissions || {}).push) return { error: 'cloud404' };
+    const w = await this.gh(c, 'GET', '/contents/.github/workflows/bflat-omr.yml');
+    if (w.status === 404) return { error: 'cloudsetup' };
+    return { ok: true };
+  },
+  async omr(b64, lyrics, onTick) {
+    const c = this.get(); if (!c) return { error: 'cloudsetup' };
+    const id = Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+    const up = await this.gh(c, 'PUT', `/contents/inbox/${id}${lyrics ? '.lyrics' : ''}.pdf`, { message: '인식 요청', content: b64 });
+    if (up.status !== 201 && up.status !== 200) return { error: this.err(up.status) };
+    const t0 = Date.now();
+    let fails = 0;
+    while (Date.now() - t0 < 25 * 60000) {
+      onTick && onTick(Math.round((Date.now() - t0) / 1000));
+      await new Promise(r => setTimeout(r, 5000));
+      const r = await this.gh(c, 'GET', `/contents/outbox/${id}.json`);
+      if (r.status === 404) { fails = 0; continue; }
+      if (r.status !== 200) { if (++fails >= 6) return { error: this.err(r.status) }; continue; }
+      let txt = '';
+      try { txt = r.data.content ? decodeURIComponent(escape(atob(r.data.content.replace(/\s/g, '')))) : ''; } catch (e) { }
+      if (!txt) { const raw = await this.gh(c, 'GET', `/contents/outbox/${id}.json`, null, true); txt = raw.status === 200 ? raw.data : ''; }   // 1MB가 넘으면 따로
+      let res; try { res = JSON.parse(txt); } catch (e) { return { error: 'failed', log: 'result' }; }
+      this.gh(c, 'DELETE', `/contents/outbox/${id}.json`, { message: '결과 가져감', sha: r.data.sha });   // 치우기 (기다리지 않아요)
+      return res;
+    }
+    return { error: 'cloudtimeout' };
+  },
+};
+/** 휴대폰의 자동 인식: 집 PC가 대답하면 PC(빠름) · 아니면 클라우드 · 둘 다 없으면 고르는 창
+ *  PC 프로그램의 omr_status · omr_pdf · ocr_install 과 똑같이 생겨서 인식 다음 과정은 PC와 똑같이 돌아요 */
+const MobileOmr = {
+  mode: null,
+  errText(r) {
+    const e = r && r.error;
+    const cloud = {
+      cloudnet: LG('인터넷에 연결할 수 없어요 · 휴대폰 데이터나 와이파이를 확인해 주세요', 'No internet · check mobile data or Wi-Fi', 'インターネットに接続できません · モバイルデータかWi-Fiを確認してください'),
+      cloud401: LG('연결 코드의 토큰이 맞지 않거나 기한이 지났어요 · PC 설정 → 휴대폰 앱 → 밖에서 자동 인식 에서 토큰을 새로 넣고 코드를 다시 받아 주세요', 'The token in the link code is invalid or expired · enter a new token on the PC (Settings → Phone app → Recognize outside) and get a new code', 'リンクコードのトークンが無効か期限切れです · PCで新しいトークンを入れてコードを取り直してください'),
+      cloud404: LG('인식 저장소를 찾지 못했어요 (저장소 이름이나 토큰 권한을 확인해 주세요)', 'Recognition repository not found (check the name or token permissions)', '認識用リポジトリが見つかりません (名前かトークンの権限を確認してください)'),
+      cloudpublic: LG('인식 저장소가 공개(Public)예요 · 악보가 남에게 보일 수 있어서 비공개(Private)로 바꿔야 써요', 'The recognition repository is Public · make it Private so your scores stay private', '認識用リポジトリが公開(Public)です · 非公開(Private)にしてください'),
+      cloudsetup: LG('PC에서 클라우드 준비를 아직 안 했어요 · PC 설정 → 휴대폰 앱 → 밖에서 자동 인식 → "준비하기"', 'Cloud setup is not done yet · on the PC: Settings → Phone app → Recognize outside → "Set up"', 'クラウドの準備がまだです · PCの 設定 → スマホアプリ → 外で自動認識 →「準備する」'),
+      cloudtimeout: LG('클라우드가 25분 안에 끝내지 못했어요 · GitHub 서버가 바쁠 수 있어요. 조금 뒤 다시 해 주세요', 'The cloud did not finish in 25 minutes · GitHub may be busy. Try again later', 'クラウドが25分以内に終わりませんでした · 少し後でもう一度お試しください'),
+      cloudhttp: LG('GitHub에서 오류가 났어요 · 잠시 뒤 다시 해 주세요', 'GitHub returned an error · try again shortly', 'GitHubでエラーが出ました · 少し後でもう一度お試しください'),
+    }[e];
+    return cloud || PcLink.errText(r);
+  },
+  async omr_status() {
+    const pc = PcLink.ready() && PcLink.get();
+    if (pc) {
+      if (await PcLink.alive(pc)) {
+        const r = await PcLink.call(pc, 'omr_status');
+        if (r && !r.error) { this.mode = 'pc'; return r; }
+      }
+    }
+    if (CloudOmr.get()) { this.mode = 'cloud'; return { ok: true, ocr: ['eng', 'kor'], cloud: true }; }
+    const how = await omrSetupDialog(pc ? PcLink.errText({ error: 'net' }) : '');
+    if (!how) return { cancel: true };
+    return this.omr_status();
+  },
+  async omr_pdf(b64, name, lyrics) {
+    PcLink.awake(true);
+    try {
+      if (this.mode === 'pc') {
+        const pc = PcLink.get(); if (!pc) return { error: 'net' };
+        return await PcLink.call(pc, 'omr_pdf', [b64, name, !!lyrics]);
+      }
+      const span = $('#pdfBusy span');
+      return await CloudOmr.omr(b64, lyrics, s => {
+        if (span) span.textContent = LG(`${Math.floor(s / 60)}분 ${s % 60}초 지남 · 보통 1~3분 걸려요 (처음 한 번은 조금 더) · 앱을 닫지 말고 기다려 주세요`, `${Math.floor(s / 60)}m ${s % 60}s · usually 1–3 min (a bit longer the first time) · keep the app open`, `${Math.floor(s / 60)}分${s % 60}秒経過 · 通常1〜3分 (初回は少し長め) · アプリを閉じずにお待ちください`);
+      });
+    } finally { PcLink.awake(false); }
+  },
+  async ocr_install() {
+    if (this.mode !== 'pc') return { langs: ['eng', 'kor'] };   // 클라우드는 서버가 알아서 받아요
+    const pc = PcLink.get(); if (!pc) return { error: 'net' };
+    PcLink.awake(true);
+    try { return await PcLink.call(pc, 'ocr_install'); } finally { PcLink.awake(false); }
+  },
+};
+/** 연결 코드 넣는 칸 (설정 화면 · 고르는 창에서 같이 써요) · 연결되면 onDone() */
+function cloudCodeForm(box, onDone) {
+  box.innerHTML = `<label class="fld">${LG('연결 코드 (PC에서 복사해서 카톡 등으로 보낸 것)', 'Link code (copied from the PC, e.g. sent via chat)', 'リンクコード (PCからコピーしてチャット等で送ったもの)')}
+    <textarea class="inp" id="ccCode" rows="2" spellcheck="false" autocomplete="off" placeholder="BFLAT1:…" style="font-family:monospace;font-size:12px"></textarea></label>
+  <p class="small" id="ccMsg"></p>
+  <button class="btn primary" id="ccGo">${LG('클라우드 연결', 'Connect cloud', 'クラウド接続')}</button>`;
+  const msg = (t, bad) => { const m = $('#ccMsg', box); m.textContent = t; m.style.color = bad ? '#dc2626' : ''; };
+  $('#ccCode', box).addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); $('#ccGo', box).click(); } });
+  $('#ccGo', box).addEventListener('click', async () => {
+    const c = CloudOmr.parse($('#ccCode', box).value);
+    if (!c) { msg(LG('코드가 올바르지 않아요 · "BFLAT1:"로 시작하는 글자 전체를 붙여 넣어 주세요', 'Invalid code · paste the whole text starting with "BFLAT1:"', 'コードが正しくありません · 「BFLAT1:」で始まる全体を貼り付けてください'), true); return; }
+    msg(LG('확인하는 중…', 'Checking…', '確認中…'));
+    const r = await CloudOmr.check(c);
+    if (!box.isConnected) return;
+    if (r.ok) { CloudOmr.set(c); msg(LG('연결됐어요 ✓ 이제 밖에서도 자동 인식이 돼요', 'Connected ✓ recognition now works anywhere', '接続しました ✓ 外でも自動認識できます')); onDone && onDone(); }
+    else msg(MobileOmr.errText(r), true);
+  });
+}
+/** 자동 인식 방법이 아직 없을 때: 클라우드(어디서나) 또는 집 PC(같은 와이파이) → 연결되면 true */
+function omrSetupDialog(why) {
+  return new Promise(res => {
+    modal(`<h2>${LG('자동 인식 연결', 'Set up recognition', '自動認識の接続')}</h2>
+    <p class="small">${LG('휴대폰 안에서는 악보 인식 프로그램(Audiveris)이 돌아가지 않아서, 아래 둘 중 하나가 대신 인식해요.', 'Phones cannot run the recognition program (Audiveris), so one of these does it for you.', 'スマホでは楽譜認識プログラム(Audiveris)が動かないため、次のどちらかが代わりに認識します。')}</p>
+    ${why ? `<p class="small" style="color:#dc2626">${esc(why)}</p>` : ''}
+    <h3 style="margin:10px 0 4px">☁ ${LG('밖에서도 (클라우드 · 추천)', 'Anywhere (cloud · recommended)', 'どこでも (クラウド · おすすめ)')}</h3>
+    <p class="muted small" style="margin:0 0 6px">${LG('PC가 꺼져 있어도 휴대폰 데이터만 있으면 돼요. 한 번에 1~3분. PC 프로그램 <b>⚙ 설정 → 휴대폰 앱 → 밖에서 자동 인식</b>에서 처음 한 번 준비하고 나오는 <b>연결 코드</b>를 붙여 넣어요.', 'Works even when the PC is off, with just mobile data. 1–3 min each. Set it up once on the PC (<b>⚙ Settings → Phone app → Recognize outside</b>) and paste the <b>link code</b> it shows.', 'PCが消えていてもモバイルデータだけで使えます。1回1〜3分。PCの<b>⚙ 設定 → スマホアプリ → 外で自動認識</b>で一度準備し、出てくる<b>リンクコード</b>を貼り付けます。')}</p>
+    <div id="osCloud"></div>
+    <h3 style="margin:14px 0 4px">🏠 ${LG('집에서 (같은 와이파이의 PC · 빠름)', 'At home (PC on the same Wi-Fi · fast)', '家で (同じWi-FiのPC · 速い)')}</h3>
+    <button class="btn" id="osPc">${LG('PC와 연결하기', 'Connect to PC', 'PCと接続')}</button>
+    <div class="modal-btns"><button class="btn" data-close>${LG('취소', 'Cancel', 'キャンセル')}</button></div>`, md => {
+      App.onModalClose = () => res(false);
+      cloudCodeForm($('#osCloud', md), () => setTimeout(() => { App.onModalClose = null; closeModal(); res(true); }, 700));
+      $('#osPc', md).addEventListener('click', async () => {
+        App.onModalClose = null;
+        if (!PcLink.ready()) { pcAppTooOld(); res(false); return; }
+        res(!!(await pcConnectDialog()));
+      });
+    }, 'wide');
+  });
+}
+/** 앱(자바)이 일을 마치면 부르는 곳 → 결과를 가져가요 */
+window.__bflatPc = id => {
+  let v; try { v = JSON.parse(AndroidBridge.pcTake(id)); } catch (e) { v = { error: 'lost' }; }
+  const f = PcLink.wait[id]; delete PcLink.wait[id]; if (f) f(v);
+};
+/** 예전 APK(이 기능이 없는 앱)일 때 */
+function pcAppTooOld() {
+  modal(`<h2>${LG('앱을 새로 설치해 주세요', 'Please update the app', 'アプリを更新してください')}</h2>
+  <p>${LG('PC와 연결해서 자동 인식하려면 새 앱(APK)이 필요해요. PC에서 받는 주소(설정 → 휴대폰 앱)로 들어가 새 APK를 받아 설치해 주세요. 지금 악보·내 악보함은 그대로 남아요.', 'Recognition through the PC needs the new app (APK). Download the new APK from the download page (PC: Settings → Phone app) and install it. Your scores stay.', 'PC経由の自動認識には新しいアプリ(APK)が必要です。ダウンロードページ(PC: 設定 → スマホアプリ)から新しいAPKを入れてください。楽譜はそのまま残ります。')}</p>
+  <div class="modal-btns"><button class="btn primary" data-close>${LG('확인', 'OK', 'OK')}</button></div>`);
+}
+/** PC 찾기 · 주소 · 연결 번호 칸 (연결 창과 설정 → 휴대폰 앱 에서 같이 써요) · 연결되면 onDone(pc) */
+function pcLinkForm(box, onDone) {
+  const pc = PcLink.get() || {};
+  box.innerHTML = `
+  <div class="pc-found" id="pcFound"></div>
+  <div class="row2"><label class="fld">${LG('PC 주소', 'PC address', 'PCアドレス')}<input class="inp" id="pcHost" value="${esc(pc.host || '')}" placeholder="${LG('예: 192.168.0.5', 'e.g. 192.168.0.5', '例: 192.168.0.5')}" inputmode="decimal" spellcheck="false" autocomplete="off"></label>
+  <label class="fld">${LG('연결 번호 (6자리)', 'Link code (6 digits)', '接続番号 (6桁)')}<input class="inp" id="pcCode" value="${esc(pc.code || '')}" placeholder="000000" inputmode="numeric" maxlength="6" autocomplete="off"></label></div>
+  <p class="small" id="pcMsg"></p>
+  <div class="row2"><button class="btn" id="pcAgain">${LG('PC 다시 찾기', 'Search again', '再検索')}</button><button class="btn primary" id="pcGo">${LG('연결', 'Connect', '接続')}</button></div>`;
+  const msg = (t, bad) => { const m = $('#pcMsg', box); m.textContent = t; m.style.color = bad ? '#dc2626' : ''; };
+  let name = pc.name || '';
+  const search = async () => {
+    const f = $('#pcFound', box);
+    f.innerHTML = `<span class="muted small">${LG('같은 와이파이에서 PC 찾는 중… (최대 15초)', 'Looking for PCs on this Wi-Fi… (up to 15 s)', '同じWi-FiでPCを探しています… (最大15秒)')}</span>`;
+    const list = await PcLink.find();
+    if (!box.isConnected) return;
+    if (!list.length) { f.innerHTML = `<span class="muted small">${LG('PC를 찾지 못했어요 · PC에서 BFlat Studio를 켜 두고 "다시 찾기"를 누르거나, PC 화면에 나온 주소를 직접 넣어 주세요', 'No PC found · keep BFlat Studio open on the PC and search again, or type the address shown on the PC', 'PCが見つかりません · PCでBFlat Studioを開いたまま再検索するか、PCに表示されたアドレスを入力してください')}</span>`; return; }
+    f.innerHTML = list.map(p => `<button class="btn pc-item" data-host="${esc(p.host)}" data-port="${p.port | 0}" data-name="${esc(p.name || '')}">🖥 <b data-notr>${esc(p.name || p.host)}</b> <span class="muted small" data-notr>${esc(p.host)}</span></button>`).join('');
+    const pick = b => { $$('.pc-item', f).forEach(x => x.classList.toggle('on', x === b)); $('#pcHost', box).value = b.dataset.host + (+b.dataset.port && +b.dataset.port !== 47390 ? ':' + b.dataset.port : ''); name = b.dataset.name; $('#pcCode', box).focus(); };
+    $$('.pc-item', f).forEach(b => b.addEventListener('click', () => pick(b)));
+    if (list.length === 1 && !$('#pcHost', box).value) pick($('.pc-item', f));
+  };
+  const go = async () => {
+    const hv = $('#pcHost', box).value.trim().replace(/^https?:\/\//, '').replace(/\/.*$/, '');
+    const code = $('#pcCode', box).value.replace(/\D/g, '');
+    const m = /^(.+?)(?::(\d+))?$/.exec(hv);
+    if (!m) { msg(LG('PC 주소를 넣어 주세요', 'Enter the PC address', 'PCアドレスを入れてください'), true); return; }
+    if (code.length !== 6) { msg(LG('연결 번호 6자리를 넣어 주세요', 'Enter the 6-digit link code', '6桁の接続番号を入れてください'), true); return; }
+    const p = { host: m[1], port: m[2] ? +m[2] : 47390, code, name: name || m[1] };
+    msg(LG('연결하는 중…', 'Connecting…', '接続中…'));
+    const r = await PcLink.call(p, 'ping');
+    if (!box.isConnected) return;
+    if (r && r.ok) { p.name = r.name || p.name; PcLink.set(p); PcLink.okAt = Date.now(); msg(LG('연결됐어요 ✓', 'Connected ✓', '接続しました ✓')); onDone && onDone(p); }
+    else msg(PcLink.errText(r), true);
+  };
+  $('#pcAgain', box).addEventListener('click', search);
+  $('#pcGo', box).addEventListener('click', go);
+  ['#pcHost', '#pcCode'].forEach(s => $(s, box).addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); go(); } }));
+  search();
+}
+const PC_LINK_INTRO = () => LG('휴대폰에서는 악보 인식 프로그램(Audiveris)이 돌아가지 않아서, <b>같은 와이파이의 PC</b>에 켜 둔 BFlat Studio가 대신 읽어 줘요. 결과는 바로 이 휴대폰으로 와요.',
+  'Phones cannot run the recognition program (Audiveris), so BFlat Studio running on a <b>PC on the same Wi-Fi</b> reads the score for you. The result comes straight back to this phone.',
+  'スマホでは楽譜認識プログラム(Audiveris)が動かないため、<b>同じWi-FiのPC</b>で起動しているBFlat Studioが代わりに読み取ります。結果はすぐこのスマホに届きます。');
+const PC_LINK_STEPS = () => `<ol class="pub-steps small">
+  <li>${LG('PC에서 <b>BFlat Studio</b>를 켜 두세요 (Audiveris가 설치된 PC)', 'Keep <b>BFlat Studio</b> open on the PC (with Audiveris installed)', 'PCで<b>BFlat Studio</b>を開いておいてください (Audiveris入りのPC)')}</li>
+  <li>${LG('휴대폰과 PC가 <b>같은 공유기(와이파이)</b>에 연결돼 있어야 해요', 'The phone and PC must be on the <b>same router (Wi-Fi)</b>', 'スマホとPCが<b>同じルーター(Wi-Fi)</b>につながっている必要があります')}</li>
+  <li>${LG('PC 화면 <b>⚙ 설정 → 휴대폰 앱</b>에 나오는 <b>연결 번호 6자리</b>를 넣어요', 'Enter the <b>6-digit link code</b> shown on the PC under <b>⚙ Settings → Phone app</b>', 'PCの<b>⚙ 設定 → スマホアプリ</b>に出る<b>6桁の接続番号</b>を入れます')}</li></ol>`;
+/** 연결 창 → 연결되면 그 PC, 취소하면 null */
+function pcConnectDialog(why) {
+  return new Promise(res => {
+    modal(`<h2>${LG('PC와 연결해서 자동 인식', 'Recognize through your PC', 'PCと接続して自動認識')}</h2>
+    <p class="small">${PC_LINK_INTRO()}</p>${PC_LINK_STEPS()}
+    ${why ? `<p class="small" style="color:#dc2626">${esc(why)}</p>` : ''}
+    <div id="pcForm"></div>
+    <div class="modal-btns"><button class="btn" data-close>${LG('취소', 'Cancel', 'キャンセル')}</button></div>`, md => {
+      App.onModalClose = () => res(null);
+      pcLinkForm($('#pcForm', md), pc => setTimeout(() => { App.onModalClose = null; closeModal(); res(pc); }, 500));
+    }, 'wide');
+  });
+}
+/** 설정 → 휴대폰 앱 (안드로이드 앱에서): 연결한 PC 보기 · 바꾸기 · 끊기 */
+function mobileOmrPane(el) {
+  const c = CloudOmr.get();
+  el.innerHTML = `<div class="pl-box"><h3 style="margin:0 0 4px">☁ ${LG('밖에서 자동 인식 (클라우드)', 'Recognize anywhere (cloud)', '外で自動認識 (クラウド)')}</h3>
+    <p class="muted small" style="margin:0 0 6px">${LG('PC가 꺼져 있어도 휴대폰 데이터만 있으면 GitHub 무료 서버가 PC와 같은 Audiveris로 인식해요 (한 번에 1~3분). PC 프로그램 <b>⚙ 설정 → 휴대폰 앱 → 밖에서 자동 인식</b>에서 나온 <b>연결 코드</b>를 붙여 넣어요.', 'Even with the PC off, a free GitHub server recognizes with the same Audiveris as the PC, using just mobile data (1–3 min each). Paste the <b>link code</b> from the PC program (<b>⚙ Settings → Phone app → Recognize outside</b>).', 'PCが消えていても、モバイルデータだけでGitHubの無料サーバーがPCと同じAudiverisで認識します (1回1〜3分)。PCの<b>⚙ 設定 → スマホアプリ → 外で自動認識</b>で出た<b>リンクコード</b>を貼り付けます。')}</p>
+    ${c ? `<div class="small">${LG('연결됨', 'Connected', '接続済み')} ✓ <span data-notr>${esc(c.o)}/${esc(c.r)}</span> <button class="btn" id="ccOff" style="min-height:0;padding:1px 8px">${LG('연결 끊기', 'Disconnect', '接続解除')}</button></div>` : '<div id="ccForm"></div>'}
+  </div>
+  ${window.AndroidBridge ? '<div id="pcPart" style="margin-top:12px"></div>' : ''}`;
+  const off = $('#ccOff', el); if (off) off.addEventListener('click', () => { CloudOmr.set(null); mobileOmrPane(el); });
+  if (!c) cloudCodeForm($('#ccForm', el), () => setTimeout(() => { if (el.isConnected) mobileOmrPane(el); }, 900));
+  if (window.AndroidBridge) pcLinkPane($('#pcPart', el));
+}
+function pcLinkPane(el) {
+  const pc = PcLink.get();
+  el.innerHTML = `<h3 style="margin-top:0">🏠 ${LG('집 PC와 연결 (같은 와이파이)', 'Home PC link (same Wi-Fi)', '家のPCと接続 (同じWi-Fi)')}</h3>
+  <p class="muted small">${PC_LINK_INTRO()}</p>${PC_LINK_STEPS()}
+  <div class="small" style="margin:6px 0">${pc ? LG(`연결한 PC: <b data-notr>${esc(pc.name || pc.host)}</b> <span data-notr>(${esc(pc.host)})</span>`, `Connected PC: <b data-notr>${esc(pc.name || pc.host)}</b> <span data-notr>(${esc(pc.host)})</span>`, `接続したPC: <b data-notr>${esc(pc.name || pc.host)}</b> <span data-notr>(${esc(pc.host)})</span>`) : LG('아직 연결한 PC가 없어요', 'No PC connected yet', 'まだPCが接続されていません')}
+  ${pc ? ` <button class="btn" id="plOff" style="min-height:0;padding:1px 8px">${LG('연결 끊기', 'Disconnect', '接続解除')}</button>` : ''}</div>
+  <div id="plForm"></div>
+  <p class="muted small" data-notr>${esc(window.AndroidBridge && AndroidBridge.version ? LG('앱 화면 버전: ', 'App screen version: ', '画面バージョン: ') + AndroidBridge.version() : '')}</p>`;
+  const off = $('#plOff', el); if (off) off.addEventListener('click', () => { PcLink.set(null); pcLinkPane(el); });
+  if (!PcLink.ready()) { $('#plForm', el).innerHTML = `<p class="small" style="color:#dc2626">${LG('이 앱은 예전 버전이라 PC 연결이 안 돼요 · 새 APK를 설치해 주세요', 'This app version is too old for the PC link · install the new APK', 'このアプリは古いためPC接続できません · 新しいAPKを入れてください')}</p>`; return; }
+  pcLinkForm($('#plForm', el), () => setTimeout(() => { if (el.isConnected) pcLinkPane(el); }, 700));
+}
+/** 설정 → 휴대폰 앱 (PC 프로그램에서): 휴대폰이 이 PC로 자동 인식을 맡길 수 있게 */
+async function phoneLinkBox(box) {
+  const api = Native();
+  if (!api || !api.phone_status) { box.remove(); return; }
+  const st = await api.phone_status();
+  const omr = api.omr_status ? await api.omr_status() : { ok: true };
+  const code = String(st.code || '').replace(/(\d{3})(\d{3})/, '$1 $2');
+  box.innerHTML = `<div class="pl-box">
+    <h3 style="margin:0 0 4px">${LG('📱 휴대폰에서 자동 인식', '📱 Recognition from the phone', '📱 スマホから自動認識')}</h3>
+    <p class="muted small" style="margin:0 0 6px">${LG('안드로이드 앱에서 "자동 인식"을 누르면 PDF가 이 PC로 와서 여기서 인식하고, 결과를 휴대폰으로 돌려보내요. 휴대폰과 이 PC가 같은 와이파이(공유기)에 있어야 해요.', 'When you press "Recognize" in the Android app, the PDF comes to this PC, is recognized here, and the result goes back to the phone. The phone and this PC must be on the same Wi-Fi (router).', 'Androidアプリで「自動認識」を押すとPDFがこのPCに届き、ここで認識して結果をスマホに返します。スマホとこのPCが同じWi-Fi(ルーター)にある必要があります。')}</p>
+    <label class="chk"><input type="checkbox" id="plOn"${st.enabled ? ' checked' : ''}> ${LG('휴대폰의 자동 인식 요청 받기', 'Accept recognition requests from the phone', 'スマホからの自動認識を受け付ける')}</label>
+    ${st.enabled && st.running ? `<div class="pl-code">${LG('연결 번호', 'Link code', '接続番号')} <b data-notr>${esc(code)}</b> <button class="btn" id="plNew" style="min-height:0;padding:1px 8px">${LG('번호 바꾸기', 'New code', '番号を変更')}</button></div>
+    <div class="small">${LG('이 PC 주소', 'This PC', 'このPCのアドレス')}: <b data-notr>${esc((st.addrs || []).join(' · ') || '?')}</b> <span class="muted" data-notr>(${esc(st.name || '')})</span></div>` : ''}
+    ${st.enabled && !st.running ? `<p class="small" style="color:#dc2626">${LG('연결을 켜지 못했어요 (다른 프로그램이 같은 번호의 통로를 쓰고 있을 수 있어요)', 'Could not start the link (another program may be using the port)', '接続を開始できませんでした (他のプログラムが同じポートを使っている可能性があります)')}: <span data-notr>${esc(st.error || '')}</span></p>` : ''}
+    ${st.enabled && !omr.ok ? `<p class="small" style="color:#dc2626">${LG('이 PC에 Audiveris가 없어서 휴대폰이 보내도 인식할 수 없어요 · PDF 열기 → "자동 인식"에서 설치 안내를 보세요', 'Audiveris is not installed on this PC, so phone requests cannot be recognized · see the install guide via Open PDF → "Recognize"', 'このPCにAudiverisがないため認識できません · PDFを開く →「自動認識」でインストール案内を見てください')}</p>` : ''}
+    <p class="muted small" style="margin:6px 0 0">${LG('처음 켤 때 <b>Windows 방화벽</b> 창이 뜨면 <b>개인·공용 네트워크 둘 다 체크 → 액세스 허용</b>을 눌러 주세요. 실수로 취소했으면: Windows 보안 → 방화벽 및 네트워크 보호 → 방화벽에서 앱 허용 → BFlat Studio 체크.', 'If a <b>Windows Firewall</b> window appears, tick <b>both Private and Public networks → Allow access</b>. If you cancelled it: Windows Security → Firewall & network protection → Allow an app through firewall → tick BFlat Studio.', '<b>Windowsファイアウォール</b>の画面が出たら<b>プライベート・パブリック両方にチェック → アクセスを許可</b>を押してください。キャンセルした場合: Windows セキュリティ → ファイアウォールとネットワーク保護 → ファイアウォールによるアプリケーションの許可 → BFlat Studioにチェック。')}</p>
+  </div>`;
+  $('#plOn', box).addEventListener('change', async e => { await api.phone_enable(e.target.checked); phoneLinkBox(box); });
+  const nb = $('#plNew', box); if (nb) nb.addEventListener('click', async () => { await api.phone_new_code(); phoneLinkBox(box); });
+}
+/** 설정 → 휴대폰 앱 (PC 프로그램에서): 밖에서 자동 인식 준비 (비공개 GitHub 저장소 + GitHub Actions) → 휴대폰 연결 코드 */
+async function cloudPcBox(box) {
+  const api = Native();
+  if (!api || !api.cloud_status) { box.remove(); return; }
+  const st = await api.cloud_status();
+  const link = (url, text) => `<a href="#" data-link="${url}">${text}</a>`;
+  box.innerHTML = `<div class="pl-box">
+    <h3 style="margin:0 0 4px">☁ ${LG('밖에서 자동 인식 (클라우드 · PC가 꺼져 있어도)', 'Recognize outside (cloud · even with the PC off)', '外で自動認識 (クラウド · PCが消えていても)')}</h3>
+    <p class="muted small" style="margin:0 0 6px">${LG('휴대폰이 PDF를 <b>내 비공개 GitHub 저장소</b>에 올리면, GitHub 무료 서버가 이 PC와 같은 Audiveris로 인식해서 결과를 돌려줘요. 휴대폰 데이터만 있으면 어디서나 돼요 (한 번에 1~3분 · 비공개 저장소는 한 달 2,000분 무료 → 수백 번). <b>처음 한 번만</b> 준비해요.', 'The phone uploads the PDF to <b>your private GitHub repository</b>, a free GitHub server recognizes it with the same Audiveris as this PC, and sends the result back. Works anywhere with mobile data (1–3 min each · private repos get 2,000 free minutes a month → hundreds of scores). Set up <b>once</b>.', 'スマホがPDFを<b>自分の非公開GitHubリポジトリ</b>に上げると、GitHubの無料サーバーがこのPCと同じAudiverisで認識して結果を返します。モバイルデータだけでどこでも使えます (1回1〜3分 · 非公開リポジトリは月2,000分無料 → 数百回)。<b>最初に一度だけ</b>準備します。')}</p>
+    <ol class="pub-steps small">
+      <li>${link('https://github.com/new', LG('새 저장소 만들기', 'Create a new repository', '新しいリポジトリを作成'))} — ${LG('이름 예: <b>bflat-omr</b> · 반드시 <b>Private</b>(비공개) · <b>Add a README file</b> 체크', 'name e.g. <b>bflat-omr</b> · must be <b>Private</b> · tick <b>Add a README file</b>', '名前例: <b>bflat-omr</b> · 必ず<b>Private</b>(非公開) · <b>Add a README file</b>にチェック')}</li>
+      <li>${link('https://github.com/settings/personal-access-tokens/new', LG('토큰 만들기', 'Create a token', 'トークンを作成'))} — Repository access: <b>Only select repositories</b> → ${LG('그 저장소', 'that repository', 'そのリポジトリ')} · Permissions: <b>Contents → Read and write</b>, <b>Workflows → Read and write</b> · ${LG('기한(Expiration)은 길게(예: 1년)', 'Expiration: long (e.g. 1 year)', '有効期限は長めに(例: 1年)')}</li>
+      <li>${LG('아래에 넣고 <b>준비하기</b> → <b>클라우드 시험</b> → 나온 <b>연결 코드</b>를 휴대폰으로 보내서(카톡 나에게 보내기 등) 앱의 설정 → 휴대폰 앱 에 붙여 넣기', 'Fill in below, press <b>Set up</b> → <b>Test cloud</b> → send the <b>link code</b> to your phone (e.g. chat to yourself) and paste it in the app under Settings → Phone app', '下に入力して<b>準備する</b> → <b>クラウドテスト</b> → 出た<b>リンクコード</b>をスマホに送り(自分宛てチャット等)、アプリの 設定 → スマホアプリ に貼り付け')}</li>
+    </ol>
+    <div class="row3"><label class="fld">${LG('GitHub 계정 이름', 'GitHub account', 'GitHubアカウント名')}<input class="inp" id="cOwner" value="${esc(st.owner)}" spellcheck="false"></label>
+    <label class="fld">${LG('비공개 저장소 이름', 'Private repository', '非公開リポジトリ名')}<input class="inp" id="cRepo" value="${esc(st.repo || 'bflat-omr')}" spellcheck="false"></label>
+    <label class="fld">${LG('토큰', 'Token', 'トークン')}<input class="inp" id="cToken" type="password" autocomplete="off" placeholder="${st.hasToken ? LG('저장돼 있어요 · 바꿀 때만 입력', 'Saved · enter only to change', '保存済み · 変更時のみ入力') : 'github_pat_…'}"></label></div>
+    <div class="row2" style="margin-top:8px"><button class="btn primary" id="cSave">${LG('준비하기', 'Set up', '準備する')}</button><button class="btn" id="cTest"${st.ready ? '' : ' disabled'}>${LG('클라우드 시험', 'Test cloud', 'クラウドテスト')}</button></div>
+    <p class="small" id="cMsg">${st.ready ? LG(`준비됐어요 ✓ (${esc(st.installedAt)})`, `Ready ✓ (${esc(st.installedAt)})`, `準備完了 ✓ (${esc(st.installedAt)})`) + (st.test ? ' · ' + (st.test.ok ? LG(`시험 통과 ✓ ${st.test.sec}초`, `Test passed ✓ ${st.test.sec}s`, `テスト合格 ✓ ${st.test.sec}秒`) : LG('시험 실패', 'Test failed', 'テスト失敗')) : '') : ''}</p>
+    ${st.ready ? `<div class="fld">${LG('휴대폰 연결 코드 — 남에게 보여 주지 마세요 (내 저장소 열쇠가 들어 있어요)', 'Phone link code — keep it private (it contains your repository key)', 'スマホ用リンクコード — 他人に見せないでください (リポジトリの鍵が入っています)')}
+      <div class="row2"><input class="inp" id="cCode" type="password" readonly data-notr style="font-family:monospace;font-size:12px"><button class="btn" id="cShow">${LG('보기', 'Show', '表示')}</button><button class="btn primary" id="cCopy">${LG('복사', 'Copy', 'コピー')}</button></div></div>` : ''}
+  </div>`;
+  $$('[data-link]', box).forEach(a => a.addEventListener('click', e => { e.preventDefault(); api.open_url(a.dataset.link); }));
+  const msg = (t, bad) => { const m = $('#cMsg', box); m.textContent = t; m.style.color = bad ? '#dc2626' : ''; };
+  const errText = r => ({ config: LG('계정 이름·저장소 이름·토큰을 모두 넣어 주세요', 'Fill in account, repository and token', 'アカウント名・リポジトリ名・トークンをすべて入れてください'),
+    public: LG('이 저장소는 공개(Public)예요 · 악보가 남에게 보일 수 있어서 비공개(Private) 저장소만 써요 (저장소 Settings → Change visibility)', 'This repository is Public · only a Private repository is allowed so your scores stay private (repo Settings → Change visibility)', 'このリポジトリは公開です · 非公開リポジトリのみ使えます (Settings → Change visibility)'),
+    push: LG('토큰에 쓰기 권한이 없어요 · Contents → Read and write 로 다시 만들어 주세요', 'The token cannot write · recreate it with Contents → Read and write', 'トークンに書き込み権限がありません · Contents → Read and write で作り直してください'),
+    workflow: LG('토큰에 Workflows 권한이 없어요 · Permissions에서 Workflows → Read and write 를 더해 주세요', 'The token lacks Workflows permission · add Workflows → Read and write', 'トークンにWorkflows権限がありません · Workflows → Read and write を追加してください'),
+    timeout: LG('10분 안에 결과가 안 왔어요 · 저장소의 Actions 탭에서 "BFlat 악보 인식"이 돌고 있는지 확인해 주세요 (Actions가 꺼져 있으면 켜기)', 'No result within 10 minutes · check the Actions tab of the repository ("BFlat 악보 인식"; enable Actions if disabled)', '10分以内に結果が来ませんでした · リポジトリのActionsタブを確認してください'),
+    http: (r.status === 401 ? LG('토큰이 맞지 않아요', 'The token is not valid', 'トークンが正しくありません') : r.status === 404 ? LG('저장소를 찾지 못했어요 (계정 이름·저장소 이름·토큰의 저장소 선택 확인)', 'Repository not found (check names and the token’s repository access)', 'リポジトリが見つかりません (名前・トークンの対象リポジトリを確認)') : `GitHub ${r.status}: ${r.message || ''}`),
+    net: LG('인터넷에 연결할 수 없어요', 'Cannot reach the internet', 'インターネットに接続できません') }[r.error] || LG('실패했어요', 'Failed', '失敗しました'));
+  $('#cSave', box).addEventListener('click', async () => {
+    msg(LG('확인하고 인식 작업 파일을 올리는 중…', 'Checking and uploading the recognition job…', '確認して認識ジョブをアップロード中…'));
+    const r = await api.cloud_save($('#cOwner', box).value, $('#cRepo', box).value, $('#cToken', box).value);
+    $('#cToken', box).value = '';
+    if (r.ok) { await cloudPcBox(box); msg(LG('준비됐어요 ✓ 이제 "클라우드 시험"을 눌러 보세요', 'Ready ✓ now press "Test cloud"', '準備完了 ✓「クラウドテスト」を押してください')); }
+    else msg(errText(r), true);
+  });
+  $('#cTest', box).addEventListener('click', async () => {
+    const t0 = Date.now();
+    const tick = setInterval(() => { if (!box.isConnected) return clearInterval(tick); const s = Math.round((Date.now() - t0) / 1000); msg(LG(`GitHub 서버에서 인식 프로그램을 준비하는 중… ${s}초 (처음엔 2~4분)`, `Preparing the recognizer on the GitHub server… ${s}s (2–4 min the first time)`, `GitHubサーバーで認識プログラムを準備中… ${s}秒 (初回は2〜4分)`)); }, 1000);
+    const r = await api.cloud_test();
+    clearInterval(tick);
+    if (!box.isConnected) return;
+    if (r.ok) msg(LG(`시험 통과 ✓ ${r.sec}초 · 가사 인식: ${(r.ocr || []).join('+') || '없음'} · 이제 연결 코드를 휴대폰으로 보내세요`, `Test passed ✓ ${r.sec}s · lyrics OCR: ${(r.ocr || []).join('+') || 'none'} · now send the link code to your phone`, `テスト合格 ✓ ${r.sec}秒 · 歌詞認識: ${(r.ocr || []).join('+') || 'なし'} · リンクコードをスマホに送ってください`));
+    else msg(r.error ? errText(r) : LG('서버에 Audiveris를 설치하지 못했어요 · 저장소 Actions 탭의 기록을 확인해 주세요', 'Could not install Audiveris on the server · check the Actions tab log', 'サーバーにAudiverisを入れられませんでした · Actionsタブの記録を確認してください'), true);
+  });
+  const code = $('#cCode', box);
+  if (code) {
+    code.value = await api.cloud_code();
+    $('#cShow', box).addEventListener('click', () => { code.type = code.type === 'password' ? 'text' : 'password'; });
+    $('#cCopy', box).addEventListener('click', async () => { try { await navigator.clipboard.writeText(code.value); } catch (e) { code.type = 'text'; code.select(); document.execCommand('copy'); } $('#cCopy', box).textContent = '✓'; });
+  }
+}
+/** PC 프로그램: 휴대폰이 맡긴 일을 화면에 알려요 (phonelink.py → main.py) */
+function phoneLinkNotice(kind) {
+  if (kind === 'phoneOmr') toast(LG('📱 휴대폰이 보낸 악보를 이 PC에서 인식하는 중… (프로그램을 끄지 마세요)', '📱 Recognizing a score sent from the phone… (keep this program open)', '📱 スマホから届いた楽譜をこのPCで認識中… (プログラムを閉じないでください)'), 600000);
+  else if (kind === 'phoneDone') toast(LG('📱 인식 결과를 휴대폰으로 보냈어요', '📱 Sent the result to the phone', '📱 認識結果をスマホに送りました'), 3600);
+  else if (kind === 'phoneOcr') toast(LG('📱 휴대폰 요청: 가사 인식 데이터를 받는 중…', '📱 Phone request: downloading lyrics recognition data…', '📱 スマホの依頼: 歌詞認識データをダウンロード中…'), 120000);
 }
 function initPdfResizer() {
   const rz = $('.pdf-resizer'), panel = $('#pdfPanel');
