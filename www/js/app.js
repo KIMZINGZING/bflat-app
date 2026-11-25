@@ -1575,11 +1575,11 @@ function scoreTypeDialog(startup, edit) {
  */
 function ensembleDialog(startup, edit, keepParts) {
   const s0 = edit ? S() : null;
-  const fromScore = edit && curType(s0) === 'ensemble' ? s0.staves.map(st => ({ name: st.name || '', clef: st.clef || 'treble' })) : null;
+  const fromScore = edit && curType(s0) === 'ensemble' ? ensembleParts(s0.staves) : null;
   let parts = clone(keepParts || fromScore || ENSEMBLE_PRESETS[0].parts);
   const clefBtns = (k, clef) => {
     const base = isCClef(clef) ? 'c' : clef;
-    return `<div class="seg ens-clefs">${[['treble', '𝄞', '높은음'], ['bass', '𝄢', '낮은음'], ['c', '𝄡', '가온음']].map(([v, g, t]) => `<button type="button" class="chip${base === v ? ' on' : ''}" data-eclef="${k}:${v}" title="${t}자리표"><span class="mus">${g}</span> ${t}</button>`).join('')}` +
+    return `<div class="seg ens-clefs">${[['treble', '𝄞', '높은음', '높은음자리표'], ['bass', '𝄢', '낮은음', '낮은음자리표'], ['c', '𝄡', '가온음', '가온음자리표'], ['grand', '𝄞𝄢', '큰보표', '피아노·하프: 높은음 + 낮은음 두 줄']].map(([v, g, t, tip]) => `<button type="button" class="chip${base === v ? ' on' : ''}" data-eclef="${k}:${v}" title="${tip}"><span class="mus">${g}</span> ${t}</button>`).join('')}` +
       `<select class="inp ens-cline" data-ecline="${k}" title="가온음자리표가 놓이는 줄 (아래에서부터)"${base === 'c' ? '' : ' hidden'}>${[1, 2, 3, 4, 5].map(n => `<option value="${n}"${isCClef(clef) && cLineOf(clef) === n ? ' selected' : (!isCClef(clef) && n === 3 ? ' selected' : '')}>${n}번째 줄 · ${C_CLEF_NAMES[n].replace(' (가운데)', '')}</option>`).join('')}</select></div>`;
   };
   const rowsHtml = () => parts.map((p, k) => `<div class="ens-row"><span class="ens-no">${k + 1}</span>
@@ -1587,9 +1587,9 @@ function ensembleDialog(startup, edit, keepParts) {
       ${clefBtns(k, p.clef)}</div>`).join('');
   const sizeOf = () => parts.length;
   const presetOpts = () => `<option value="">미리 정한 편성 고르기…</option>` + ENSEMBLE_PRESETS.filter(p => p.n === sizeOf()).map(p => `<option value="${ENSEMBLE_PRESETS.indexOf(p)}">${esc(p.label)}</option>`).join('');
-  const loss = () => edit ? typeLoss(s0, 'ensemble', parts.length) : 0;
+  const loss = () => edit ? typeLoss(s0, 'ensemble', ensembleStaffN(parts)) : 0;
   modal(`<h2>앙상블 편성 <span class="type-tag">2중주 ~ 5중주</span></h2>
-  <p class="muted small">악기마다 한 줄씩 만들어요. 줄마다 높은음자리표 · 낮은음자리표 · 가온음자리표(비올라 = 3번째 줄, 첼로·바순 높은 음역 = 4번째 줄)를 고를 수 있어요.</p>
+  <p class="muted small">악기마다 한 줄씩 만들어요. 줄마다 높은음자리표 · 낮은음자리표 · 가온음자리표(비올라 = 3번째 줄, 첼로·바순 높은 음역 = 4번째 줄)를 고를 수 있어요. 피아노·하프는 큰보표(높은음 + 낮은음 두 줄)로 들어가요.</p>
   <div class="fld">몇 중주인가요?</div>
   <div class="chips ens-size">${ENSEMBLE_SIZES.map(([n, a, b]) => `<button type="button" class="chip${n === parts.length ? ' on' : ''}" data-esize="${n}"><b>${a}</b> ${b}</button>`).join('')}</div>
   <label class="fld">편성<select class="inp" id="ePreset">${presetOpts()}</select></label>
@@ -1657,10 +1657,10 @@ function newScoreDialog(startup, type, edit, parts) {
     inst: (s0.staves[0] && s0.staves[0].name && cur !== 'grand') ? s0.staves[0].name : (type === 'voicePiano' ? 'Voice' : 'Instrument')
   } : { title: '', comp: '', lyr: '', num: 4, den: 4, mpl: 4, lines: 4, key: 0, tempo: 90, term: tempoTerm(90), ll: 1, clef: 'treble', inst: type === 'voicePiano' ? 'Voice' : 'Instrument' };
   if (type === 'voicePiano' && isCClef(v.clef)) v.clef = 'treble';
-  const loss = edit && (type !== cur || (ens && parts.length < staffCount(s0))) ? typeLoss(s0, type, ens ? parts.length : undefined) : 0;
+  const loss = edit && (type !== cur || (ens && ensembleStaffN(parts) < staffCount(s0))) ? typeLoss(s0, type, ens ? ensembleStaffN(parts) : undefined) : 0;
   const okLabel = edit ? (loss ? `바꾸기 (음표 ${loss}개 사라져요)` : '저장') : '악보 만들기';
   const btns = `<button class="btn" id="nBack">${ens ? '← 편성 바꾸기' : '← 종류 다시 고르기'}</button><span class="grow"></span>${startup ? '' : '<button class="btn" data-close>취소</button>'}<button class="btn primary${loss ? ' danger' : ''}" data-ok>${okLabel}</button>`;
-  const clefName = c => c === 'bass' ? '𝄢 낮은음' : isCClef(c) ? `𝄡 가온음 ${cLineOf(c)}줄` : '𝄞 높은음';
+  const clefName = c => c === 'grand' ? '𝄞𝄢 큰보표' : c === 'bass' ? '𝄢 낮은음' : isCClef(c) ? `𝄡 가온음 ${cLineOf(c)}줄` : '𝄞 높은음';
   const nameField = (type === 'voicePiano' || type === 'instPiano') ? `<label class="fld">윗줄 이름 (악보 왼쪽)<input class="inp" id="nInst" value="${esc(v.inst)}" placeholder="예: Voice, 노래, Violin, Viola, Flute"></label>`
     : ens ? `<div class="fld">편성 · ${parts.length}중주</div><div class="ens-sum">${parts.map((p, k) => `<span><b>${k + 1}</b> ${esc(p.name)} <small class="mus">${clefName(p.clef)}</small></span>`).join('')}</div>` : '';
   const head = edit ? `곡 정보` : `새 악보`;
@@ -1696,7 +1696,7 @@ function newScoreDialog(startup, type, edit, parts) {
     $$('[data-cline]', md).forEach(b => b.addEventListener('click', () => { cLine = +b.dataset.cline; $$('[data-cline]', md).forEach(x => x.classList.toggle('on', x === b)); }));
     $('#nBack', md).addEventListener('click', () => ens ? ensembleDialog(startup, edit, parts) : scoreTypeDialog(startup, edit));
     md.querySelector('[data-ok]').addEventListener('click', () => {
-      const clef = type === 'grand' ? 'treble' : ens ? parts[0].clef : (clefBase === 'c' ? 'c' + cLine : clefBase);
+      const clef = type === 'grand' ? 'treble' : ens ? ensembleStaves(parts)[0].clef : (clefBase === 'c' ? 'c' + cLine : clefBase);
       const inst = $('#nInst', md) ? $('#nInst', md).value.trim() : '';
       const vals = { title: $('#nTitle', md).value.trim(), composer: $('#nComp', md).value.trim(), lyricist: $('#nLyr', md).value.trim(), num: +$('#nNum', md).value || 4, den: +$('#nDen', md).value, mpl: Math.max(1, +$('#nMpl', md).value || 4), key: +$('#nKey', md).value, tempo: tempoInput($('#nTempo', md).value), tempoText: $('#nTerm', md).value.trim(), swing: $('#nSwing', md).checked, lyricLines: +$('#nLL', md).value };
       if (edit) { applyScoreEdit(type, vals, clef, inst, parts); closeModal(); return; }
