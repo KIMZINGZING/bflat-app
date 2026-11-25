@@ -1,6 +1,6 @@
 {
- "version": "3658d8c5a18f",
- "built": "2026-11-25 02:46",
+ "version": "2a921439850e",
+ "built": "2026-11-25 11:44",
  "files": {
   "assets/apple-touch-icon.png": {
    "sha256": "e9aca0c2fe30a5f6300661decbd1d578c00c7c0cead84b40374e696224d6712f",
@@ -27,8 +27,8 @@
    "size": 1379
   },
   "css/style.css": {
-   "sha256": "e38f289a0240a76db641fe4ac6ae45c71a45cf35adda59818b286afcfe76ae4a",
-   "size": 27261
+   "sha256": "b11c22fb22dcc5b2c6e62ea0f685af258807290cc6bf4e5b274934020e8374f6",
+   "size": 27976
   },
   "fonts/Griun_Yeeun-Rg.ttf": {
    "sha256": "866cfc5bfb52eacf4e39059524d719775895856eb94f170bcc4f4c89b2ae1aaa",
@@ -39,8 +39,8 @@
    "size": 4990
   },
   "js/app.js": {
-   "sha256": "0ab72c956699ff2f84874ecfe706e6585b9a0dd9240d3055df0f4707ef81db86",
-   "size": 213725
+   "sha256": "f295676ad194ab72e461b6dcb0c93c01ca620f0ab22cfa4360c645018f6b7a42",
+   "size": 263214
   },
   "js/audio.js": {
    "sha256": "1197d4458b423279714557c5e262103ef2e32ffd81672718c5a8a4d6a4eb69dc",
