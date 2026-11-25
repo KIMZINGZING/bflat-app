@@ -65,32 +65,90 @@ const SCORE_TYPES = {
   voicePiano: { label: '피아노 + 노래 (3단)', staves: o => [{ name: o.instName || 'Voice', clef: o.clef || 'treble' }, { name: 'Piano', clef: 'treble', grp: 'piano' }, { name: '', clef: 'bass', grp: 'piano' }] },
   instPiano: { label: '피아노 + 악기 (3단)', staves: o => [{ name: o.instName || 'Instrument', clef: o.clef || 'treble' }, { name: 'Piano', clef: 'treble', grp: 'piano' }, { name: '', clef: 'bass', grp: 'piano' }] },
   // 앙상블(2~5중주): 악기마다 한 줄 · 음자리표는 악기마다 (높은음 · 낮은음 · 가온음 1~5줄) · 왼쪽 꺾쇠괄호로 묶고 마디선은 이어서
-  ensemble: { label: '앙상블 (2~5중주)', staves: o => (o.parts && o.parts.length ? o.parts : ENSEMBLE_PRESETS[0].parts).map(p => ({ name: p.name || '', short: p.short || shortInstName(p.name), clef: p.clef || 'treble', grp: 'ens' })) },
+  ensemble: { label: '앙상블 (2~5중주)', staves: o => ensembleStaves(o.parts && o.parts.length ? o.parts : ENSEMBLE_PRESETS[0].parts) },
 };
 const ENSEMBLE_SIZES = [[2, '2중주', '듀오'], [3, '3중주', '트리오'], [4, '4중주', '콰르텟'], [5, '5중주', '퀸텟']];
 /** 편성 미리 정해 둔 것 (악기 이름 · 음자리표) — 이름·음자리표는 창에서 바꿀 수 있어요 */
-const ENSEMBLE_PRESETS = [
-  { n: 2, label: '클라리넷 2중주', parts: [{ name: 'Clarinet in B♭ 1', clef: 'treble' }, { name: 'Clarinet in B♭ 2', clef: 'treble' }] },
-  { n: 2, label: '플루트 2중주', parts: [{ name: 'Flute 1', clef: 'treble' }, { name: 'Flute 2', clef: 'treble' }] },
-  { n: 2, label: '바이올린 2중주', parts: [{ name: 'Violin 1', clef: 'treble' }, { name: 'Violin 2', clef: 'treble' }] },
-  { n: 2, label: '바이올린 + 첼로', parts: [{ name: 'Violin', clef: 'treble' }, { name: 'Cello', clef: 'bass' }] },
-  { n: 2, label: '바이올린 + 비올라', parts: [{ name: 'Violin', clef: 'treble' }, { name: 'Viola', clef: 'c3' }] },
-  { n: 2, label: '플루트 + 클라리넷', parts: [{ name: 'Flute', clef: 'treble' }, { name: 'Clarinet in B♭', clef: 'treble' }] },
-  { n: 3, label: '현악 3중주', parts: [{ name: 'Violin', clef: 'treble' }, { name: 'Viola', clef: 'c3' }, { name: 'Cello', clef: 'bass' }] },
-  { n: 3, label: '클라리넷 3중주', parts: [{ name: 'Clarinet in B♭ 1', clef: 'treble' }, { name: 'Clarinet in B♭ 2', clef: 'treble' }, { name: 'Clarinet in B♭ 3', clef: 'treble' }] },
-  { n: 3, label: '플루트 3중주', parts: [{ name: 'Flute 1', clef: 'treble' }, { name: 'Flute 2', clef: 'treble' }, { name: 'Flute 3', clef: 'treble' }] },
-  { n: 3, label: '목관 3중주', parts: [{ name: 'Flute', clef: 'treble' }, { name: 'Clarinet in B♭', clef: 'treble' }, { name: 'Bassoon', clef: 'bass' }] },
-  { n: 4, label: '현악 4중주', parts: [{ name: 'Violin 1', clef: 'treble' }, { name: 'Violin 2', clef: 'treble' }, { name: 'Viola', clef: 'c3' }, { name: 'Cello', clef: 'bass' }] },
-  { n: 4, label: '클라리넷 4중주', parts: [{ name: 'Clarinet in B♭ 1', clef: 'treble' }, { name: 'Clarinet in B♭ 2', clef: 'treble' }, { name: 'Clarinet in B♭ 3', clef: 'treble' }, { name: 'Bass Clarinet', clef: 'treble' }] },
-  { n: 4, label: '색소폰 4중주', parts: [{ name: 'Soprano Sax', clef: 'treble' }, { name: 'Alto Sax', clef: 'treble' }, { name: 'Tenor Sax', clef: 'treble' }, { name: 'Baritone Sax', clef: 'treble' }] },
-  { n: 4, label: '목관 4중주', parts: [{ name: 'Flute', clef: 'treble' }, { name: 'Oboe', clef: 'treble' }, { name: 'Clarinet in B♭', clef: 'treble' }, { name: 'Bassoon', clef: 'bass' }] },
-  { n: 4, label: '혼성 4부 (SATB)', parts: [{ name: 'Soprano', clef: 'treble' }, { name: 'Alto', clef: 'treble' }, { name: 'Tenor', clef: 'treble' }, { name: 'Bass', clef: 'bass' }] },
-  { n: 5, label: '목관 5중주', parts: [{ name: 'Flute', clef: 'treble' }, { name: 'Oboe', clef: 'treble' }, { name: 'Clarinet in B♭', clef: 'treble' }, { name: 'Horn in F', clef: 'treble' }, { name: 'Bassoon', clef: 'bass' }] },
-  { n: 5, label: '금관 5중주', parts: [{ name: 'Trumpet in B♭ 1', clef: 'treble' }, { name: 'Trumpet in B♭ 2', clef: 'treble' }, { name: 'Horn in F', clef: 'treble' }, { name: 'Trombone', clef: 'bass' }, { name: 'Tuba', clef: 'bass' }] },
-  { n: 5, label: '현악 5중주', parts: [{ name: 'Violin 1', clef: 'treble' }, { name: 'Violin 2', clef: 'treble' }, { name: 'Viola', clef: 'c3' }, { name: 'Cello', clef: 'bass' }, { name: 'Contrabass', clef: 'bass' }] },
-];
+const ENSEMBLE_PRESETS = (() => {
+  // 짧게 쓰는 악기들 · 'grand' = 큰보표(높은음 + 낮은음 두 줄: 피아노 · 하프)
+  const P = (name, clef) => ({ name, clef: clef || 'treble' });
+  const Vn = n => P(n ? 'Violin ' + n : 'Violin'), Va = n => P(n ? 'Viola ' + n : 'Viola', 'c3'), Vc = n => P(n ? 'Cello ' + n : 'Cello', 'bass');
+  const Cb = P('Contrabass', 'bass'), Pno = P('Piano', 'grand'), Hp = P('Harp', 'grand'), Gtr = P('Guitar');
+  const Fl = P('Flute'), Ob = P('Oboe'), Cl = P('Clarinet in B♭'), Bsn = P('Bassoon', 'bass'), Hn = P('Horn in F');
+  const Tpt = n => P(n ? 'Trumpet in B♭ ' + n : 'Trumpet in B♭'), Tbn = P('Trombone', 'bass'), Tba = P('Tuba', 'bass');
+  const SQ = [Vn(1), Vn(2), Va(), Vc()];
+  const L = [
+    // 2중주
+    ['클라리넷 2중주', [P('Clarinet in B♭ 1'), P('Clarinet in B♭ 2')]],
+    ['플루트 2중주', [P('Flute 1'), P('Flute 2')]],
+    ['바이올린 2중주', [Vn(1), Vn(2)]],
+    ['바이올린 + 비올라', [Vn(), Va()]],
+    ['바이올린 + 첼로', [Vn(), Vc()]],
+    ['플루트 + 클라리넷', [Fl, Cl]],
+    ['플루트 + 기타', [Fl, Gtr]],
+    // 3중주
+    ['피아노 3중주', [Vn(), Vc(), Pno]],
+    ['현악 3중주', [Vn(), Va(), Vc()]],
+    ['클라리넷 3중주 (첼로 · 피아노)', [Cl, Vc(), Pno]],
+    ['클라리넷 + 비올라 + 피아노', [Cl, Va(), Pno]],
+    ['호른 3중주', [Hn, Vn(), Pno]],
+    ['바이올린 + 클라리넷 + 피아노', [Vn(), Cl, Pno]],
+    ['플루트 + 첼로 + 피아노', [Fl, Vc(), Pno]],
+    ['플루트 + 비올라 + 하프', [Fl, Va(), Hp]],
+    ['리드 3중주', [Ob, Cl, Bsn]],
+    ['목관 3중주', [Fl, Cl, Bsn]],
+    ['금관 3중주', [Tpt(), Hn, Tbn]],
+    ['클라리넷 3중주 (클라리넷만)', [P('Clarinet in B♭ 1'), P('Clarinet in B♭ 2'), P('Clarinet in B♭ 3')]],
+    ['플루트 3중주', [P('Flute 1'), P('Flute 2'), P('Flute 3')]],
+    // 4중주
+    ['현악 4중주', SQ],
+    ['피아노 4중주', [Vn(), Va(), Vc(), Pno]],
+    ['플루트 4중주', [Fl, Vn(), Va(), Vc()]],
+    ['오보에 4중주', [Ob, Vn(), Va(), Vc()]],
+    ['클라리넷 4중주 (클라리넷 + 현악 3중주)', [Cl, Vn(), Va(), Vc()]],
+    ['클라리넷 + 바이올린 + 첼로 + 피아노', [Cl, Vn(), Vc(), Pno]],
+    ['목관 4중주', [Fl, Ob, Cl, Bsn]],
+    ['금관 4중주 (트롬본)', [Tpt(1), Tpt(2), Hn, Tbn]],
+    ['금관 4중주 (튜바)', [Tpt(1), Tpt(2), Hn, Tba]],
+    ['색소폰 4중주', [P('Soprano Sax'), P('Alto Sax'), P('Tenor Sax'), P('Baritone Sax')]],
+    ['클라리넷 4중주 (클라리넷만)', [P('Clarinet in B♭ 1'), P('Clarinet in B♭ 2'), P('Clarinet in B♭ 3'), P('Bass Clarinet')]],
+    ['혼성 4부 (SATB)', [P('Soprano'), P('Alto'), P('Tenor'), P('Bass', 'bass')]],
+    // 5중주
+    ['피아노 5중주', [...SQ, Pno]],
+    ['피아노 5중주 (콘트라베이스)', [Vn(), Va(), Vc(), Cb, Pno]],
+    ['피아노와 관악 5중주', [Ob, Cl, Hn, Bsn, Pno]],
+    ['현악 5중주 (비올라 2)', [Vn(1), Vn(2), Va(1), Va(2), Vc()]],
+    ['현악 5중주 (첼로 2)', [Vn(1), Vn(2), Va(), Vc(1), Vc(2)]],
+    ['현악 5중주 (콘트라베이스)', [...SQ, Cb]],
+    ['클라리넷 5중주', [Cl, ...SQ]],
+    ['호른 5중주', [Hn, Vn(), Va(1), Va(2), Vc()]],
+    ['기타 5중주', [Gtr, ...SQ]],
+    ['목관 5중주', [Fl, Ob, Cl, Hn, Bsn]],
+    ['금관 5중주', [Tpt(1), Tpt(2), Hn, Tbn, Tba]],
+  ];
+  return L.map(([label, parts]) => ({ n: parts.length, label, parts: clone(parts) }));
+})();
+/** 앙상블 악기 → 오선들 (큰보표 악기는 두 줄: 이름은 윗줄에만, 중괄호로 묶음) */
+function ensembleStaves(parts) {
+  const out = [];
+  parts.forEach(p => {
+    if (p.clef === 'grand') { out.push({ name: p.name || '', short: p.short || shortInstName(p.name), clef: 'treble', grp: 'piano' }, { name: '', short: '', clef: 'bass', grp: 'piano' }); return; }
+    out.push({ name: p.name || '', short: p.short || shortInstName(p.name), clef: p.clef || 'treble', grp: 'ens' });
+  });
+  return out;
+}
+/** 앙상블 악보의 오선들 → 악기들 (피아노 두 줄은 하나로) */
+function ensembleParts(staves) {
+  const parts = [];
+  (staves || []).forEach((st, si) => {
+    if (isPianoStaff(st)) { if (si > 0 && staves[si - 1].grp === st.grp) return; parts.push({ name: st.name || 'Piano', clef: 'grand' }); return; }
+    parts.push({ name: st.name || '', clef: st.clef || 'treble' });
+  });
+  return parts;
+}
+function ensembleStaffN(parts) { return parts.reduce((a, p) => a + (p.clef === 'grand' ? 2 : 1), 0); }
 /** 둘째 줄부터 왼쪽에 쓰는 짧은 악기 이름 (Clarinet in B♭ 1 → Cl. 1) */
-const INST_SHORT = [[/^clarinet|^클라리넷/i, 'Cl.'], [/^bass clarinet/i, 'B. Cl.'], [/^flute|^플루트/i, 'Fl.'], [/^piccolo/i, 'Picc.'], [/^oboe|^오보에/i, 'Ob.'], [/^bassoon|^바순/i, 'Bsn.'], [/^horn|^호른/i, 'Hn.'], [/^trumpet|^트럼펫/i, 'Tpt.'], [/^trombone|^트롬본/i, 'Tbn.'], [/^tuba|^튜바/i, 'Tba.'], [/^violin|^바이올린/i, 'Vn.'], [/^viola|^비올라/i, 'Va.'], [/^cello|^violoncello|^첼로/i, 'Vc.'], [/^contrabass|^double bass|^콘트라베이스/i, 'Cb.'], [/^soprano sax/i, 'S. Sax.'], [/^alto sax/i, 'A. Sax.'], [/^tenor sax/i, 'T. Sax.'], [/^baritone sax/i, 'Bari. Sax.'], [/^soprano/i, 'S.'], [/^alto/i, 'A.'], [/^tenor/i, 'T.'], [/^bass$|^bass\b/i, 'B.'], [/^voice|^노래/i, 'V.']];
+const INST_SHORT = [[/^clarinet|^클라리넷/i, 'Cl.'], [/^bass clarinet/i, 'B. Cl.'], [/^flute|^플루트/i, 'Fl.'], [/^piano|^피아노/i, 'Pno.'], [/^harp|^하프/i, 'Hp.'], [/^guitar|^기타/i, 'Gtr.'], [/^piccolo/i, 'Picc.'], [/^oboe|^오보에/i, 'Ob.'], [/^bassoon|^바순/i, 'Bsn.'], [/^horn|^호른/i, 'Hn.'], [/^trumpet|^트럼펫/i, 'Tpt.'], [/^trombone|^트롬본/i, 'Tbn.'], [/^tuba|^튜바/i, 'Tba.'], [/^violin|^바이올린/i, 'Vn.'], [/^viola|^비올라/i, 'Va.'], [/^cello|^violoncello|^첼로/i, 'Vc.'], [/^contrabass|^double bass|^콘트라베이스/i, 'Cb.'], [/^soprano sax/i, 'S. Sax.'], [/^alto sax/i, 'A. Sax.'], [/^tenor sax/i, 'T. Sax.'], [/^baritone sax/i, 'Bari. Sax.'], [/^soprano/i, 'S.'], [/^alto/i, 'A.'], [/^tenor/i, 'T.'], [/^bass$|^bass\b/i, 'B.'], [/^voice|^노래/i, 'V.']];
 function shortInstName(name) {
   name = (name || '').trim();
   if (!name) return '';
