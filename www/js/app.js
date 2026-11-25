@@ -2274,11 +2274,12 @@ function omrFailText(res) {
   return where + (t || LG('이 PDF에서 악보를 읽지 못했어요 · 아래 "자세히"에 인식 프로그램이 남긴 이유가 있어요', 'Could not read music from this PDF · the recognizer\'s reason is under "details" below', 'このPDFから楽譜を読めませんでした · 下の「詳しく」に理由があります'));
 }
 /** 인식 결과 (한 번 인식하면 다시 안 돌려요 · 가사까지 읽은 결과는 따로 남겨요)
- *  want.lyrics = true → 가사까지 읽은 결과가 필요해요 / 없으면 아무 결과나 */
+ *  want.lyrics = 'ko' | 'en' (가사 언어 · true 는 'ko') → 가사까지 읽은 결과가 필요해요 / 없으면 아무 결과나 */
 async function getOmrXml(want) {
   want = want || {};
+  if (want.lyrics && want.lyrics !== 'en') want.lyrics = 'ko';
   if (!Pdf.file) { toast('먼저 PDF 악보를 여세요'); return null; }
-  if (want.lyrics ? Pdf.omrLyr : Pdf.omrXml) return want.lyrics ? Pdf.omrLyr : Pdf.omrXml;
+  if (want.lyrics ? Pdf.omrLyr && Pdf.omrLyrLang === want.lyrics : Pdf.omrXml) return want.lyrics ? Pdf.omrLyr : Pdf.omrXml;
   if (!want.lyrics && Pdf.omrLyr) return Pdf.omrLyr;
   const api = OmrApi();
   if (!api || !api.omr_status) { modal(`<h2>자동 인식</h2><p>자동 인식은 <b>바탕화면 프로그램</b>(BFlat Studio)에서만 돼요. 브라우저에서는 PDF를 옆에 띄워 보면서 쓸 수 있어요.</p><div class="modal-btns"><button class="btn primary" data-close>확인</button></div>`); return null; }
@@ -2293,7 +2294,7 @@ async function getOmrXml(want) {
   }
   busy.hidden = false;
   try {
-    const res = await api.omr_pdf(await blobToB64(Pdf.file), Pdf.name, !!want.lyrics);
+    const res = await api.omr_pdf(await blobToB64(Pdf.file), Pdf.name, want.lyrics || false);
     if (remote && res && (['net', 'timeout', 'http', 'lost', 'code', 'blocked'].includes(res.error) || /^cloud/.test(res.error || ''))) {
       if (res.error !== 'timeout') PcLink.okAt = 0;
       const cloud = /^cloud/.test(res.error);
@@ -2310,7 +2311,7 @@ async function getOmrXml(want) {
     let xml;
     try { xml = fixOmrXml(raw); } catch (e) { console.error(e); xml = raw; }
     try { xml = omrAddMarks(xml, res.marks); } catch (e) { console.error(e); }
-    if (res.lyrics) Pdf.omrLyr = xml; else Pdf.omrXml = xml;
+    if (res.lyrics) { Pdf.omrLyr = xml; Pdf.omrLyrLang = want.lyrics || 'ko'; } else Pdf.omrXml = xml;
     Pdf.omrCount = res.count || 1;
     return xml;
   } finally {
@@ -2411,24 +2412,29 @@ async function ensureOcr() {
 /** PDF 자동 인식 → 고칠 수 있는 BFlat 악보로 열기 */
 async function pdfRecognize() {
   if (!Pdf.file) { toast('먼저 PDF 악보를 여세요'); return; }
-  let lyrics = false;
-  try { lyrics = localStorage.getItem('bflat.omrLyrics') === '1'; } catch (e) { }
+  let lyrics = false, lyrLang = (App.settings && App.settings.lang === 'en') ? 'en' : 'ko';
+  try { lyrics = localStorage.getItem('bflat.omrLyrics') === '1'; lyrLang = localStorage.getItem('bflat.omrLyrLang') || lyrLang; } catch (e) { }
   const ok = await new Promise(res => modal(`<h2>자동 인식 → 악보로</h2><p>PDF 속 음표를 읽어 <b>새 악보</b>로 열어요.${App.blank ? '' : ' 지금 악보는 되돌리기(Ctrl+Z)할 수 있지만, 따로 남기려면 먼저 저장하세요.'}</p>
     ${Pdf.space && Pdf.space < OMR_MIN_SPACE ? `<p class="small" style="color:var(--red);font-weight:600" data-notr>${esc(lowResText())}</p>` : ''}
     <label class="omr-lyr"><input type="checkbox" id="omrLyr"${lyrics ? ' checked' : ''}> <b>가사도 함께 가져올까요?</b></label>
     <p class="muted small" style="margin-top:4px">가사가 있는 악보면 체크하세요. 가사를 읽어 음표 하나하나에 맞춰 넣어요 (시간이 조금 더 걸려요).</p>
+    <div class="omr-lyr-lang" style="margin:2px 0 6px 22px">${LG('가사 언어', 'Lyrics language', '歌詞の言語')}:
+      <label style="margin-left:8px"><input type="radio" name="omrLyrLang" value="ko"${lyrLang !== 'en' ? ' checked' : ''}> ${LG('한글', 'Korean', '韓国語')}</label>
+      <label style="margin-left:8px"><input type="radio" name="omrLyrLang" value="en"${lyrLang === 'en' ? ' checked' : ''}> ${LG('영어', 'English', '英語')}</label></div>
     <p class="muted small">인쇄된 깨끗한 악보일수록 잘 읽어요. 셈여림표(f, p …)는 넣지 않아요. 틀린 음·박자는 옆의 PDF를 보면서 고쳐 주세요.</p>
     <div class="modal-btns"><button class="btn" data-close>취소</button><button class="btn primary" data-ok>인식 시작</button></div>`, md => {
       md.querySelector('[data-ok]').addEventListener('click', () => {
         lyrics = $('#omrLyr', md).checked;
+        const lr = md.querySelector('input[name="omrLyrLang"]:checked'); if (lr) lyrLang = lr.value;
         App.onModalClose = null; closeModal(); res(true);
       });
       App.onModalClose = () => res(false);
     }));
   if (!ok) return;
-  try { localStorage.setItem('bflat.omrLyrics', lyrics ? '1' : '0'); } catch (e) { }
+  try { localStorage.setItem('bflat.omrLyrics', lyrics ? '1' : '0'); localStorage.setItem('bflat.omrLyrLang', lyrLang); } catch (e) { }
   const api = OmrApi();
   if (lyrics && api && api.ocr_install) { const o = await ensureOcr(); if (o === null) return; if (!o) lyrics = false; }
+  if (lyrics) lyrics = lyrLang;          // 'ko' · 'en' → 글자 인식 주 언어 (omrcore.order_langs)
   const raw = await getOmrXml({ lyrics }); if (!raw) return;
   let xml = raw;
   try { xml = omrForImport(raw, { lyrics }); } catch (e) { console.error(e); }
@@ -2753,7 +2759,7 @@ const CloudOmr = {
   async omr(b64, lyrics, onTick) {
     const c = this.get(); if (!c) return { error: 'cloudsetup' };
     const id = Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
-    const up = await this.gh(c, 'PUT', `/contents/inbox/${id}${lyrics ? '.lyrics' : ''}.pdf`, { message: '인식 요청', content: b64 });
+    const up = await this.gh(c, 'PUT', `/contents/inbox/${id}${lyrics === 'en' ? '.lyrics-en' : lyrics ? '.lyrics' : ''}.pdf`, { message: '인식 요청', content: b64 });
     if (up.status !== 201 && up.status !== 200) return { error: this.err(up.status) };
     const t0 = Date.now();
     let fails = 0;
@@ -2808,7 +2814,7 @@ const MobileOmr = {
     try {
       if (this.mode === 'pc') {
         const pc = PcLink.get(); if (!pc) return { error: 'net' };
-        return await PcLink.call(pc, 'omr_pdf', [b64, name, !!lyrics]);
+        return await PcLink.call(pc, 'omr_pdf', [b64, name, lyrics || false]);   // 'ko' · 'en' (예전 PC 프로그램은 true 로 받아요)
       }
       const span = $('#pdfBusy span');
       return await CloudOmr.omr(b64, lyrics, s => {
