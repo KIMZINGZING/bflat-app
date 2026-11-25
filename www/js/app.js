@@ -2422,6 +2422,7 @@ async function pdfRecognize() {
       <label style="margin-left:8px"><input type="radio" name="omrLyrLang" value="ko"${lyrLang !== 'en' ? ' checked' : ''}> ${LG('한글', 'Korean', '韓国語')}</label>
       <label style="margin-left:8px"><input type="radio" name="omrLyrLang" value="en"${lyrLang === 'en' ? ' checked' : ''}> ${LG('영어', 'English', '英語')}</label></div>
     <p class="muted small">인쇄된 깨끗한 악보일수록 잘 읽어요. 셈여림표(f, p …)는 넣지 않아요. 틀린 음·박자는 옆의 PDF를 보면서 고쳐 주세요.</p>
+    <p class="muted small">${LG('한 파일에 여러 곡(예: 찬송가 여러 장)이 들어 있으면, 섞이지 않게 1곡씩 나눠서 변환하고 곡 이름으로 내 악보함에 저장해요.', 'If the file has several songs (e.g. several hymns), each song is converted separately and saved to My scores by its title.', '1つのファイルに複数の曲(例: 讃美歌数曲)があれば、混ざらないよう1曲ずつ変換し、曲名でマイ楽譜に保存します。')}</p>
     <div class="modal-btns"><button class="btn" data-close>취소</button><button class="btn primary" data-ok>인식 시작</button></div>`, md => {
       md.querySelector('[data-ok]').addEventListener('click', () => {
         lyrics = $('#omrLyr', md).checked;
@@ -2436,6 +2437,14 @@ async function pdfRecognize() {
   if (lyrics && api && api.ocr_install) { const o = await ensureOcr(); if (o === null) return; if (!o) lyrics = false; }
   if (lyrics) lyrics = lyrLang;          // 'ko' · 'en' → 글자 인식 주 언어 (omrcore.order_langs)
   const raw = await getOmrXml({ lyrics }); if (!raw) return;
+  // 여러 곡이 든 PDF(찬송가 책 등) → 안내하고 1곡씩 나눠서 변환 · 내 악보함에 곡 이름으로 저장
+  let songs = [];
+  try { songs = omrSplitSongs(raw); } catch (e) { console.error(e); }
+  if (songs.length > 1) {
+    const how = await omrMultiSongDialog(songs);
+    if (!how) return;
+    if (how === 'split') return omrSaveSongs(songs, lyrics);
+  }
   let xml = raw;
   try { xml = omrForImport(raw, { lyrics }); } catch (e) { console.error(e); }
   const swing = await detectSwing(Pdf.file);
@@ -2450,6 +2459,71 @@ async function pdfRecognize() {
   const gotLyr = lyrics && App.s.measures.some(m => Object.values(m.lyrics || {}).some(Boolean));
   const msg = Pdf.omrCount > 1 ? `인식했어요 (악장 ${Pdf.omrCount}개 중 첫 번째)` : '인식했어요';
   toast(msg + (lyrics ? (gotLyr ? ' · 가사도 넣었어요' : ' · 가사는 찾지 못했어요') : '') + ' · 틀린 곳은 옆의 PDF를 보며 고쳐 주세요', 4600);
+}
+/** 여러 곡 PDF: 곡 이름 (글자 인식으로 못 읽었으면 "파일 이름 (N번째 곡)") */
+function omrSongName(sg, k) {
+  const base = (Pdf.name || LG('악보', 'Score', '楽譜')).replace(/\.(pdf|png|jpe?g|hwpx?|webp|gif|bmp|tiff?)$/i, '');
+  return sg.title || LG(`${base} (${k + 1}번째 곡)`, `${base} (song ${k + 1})`, `${base} (${k + 1}曲目)`);
+}
+/** 여러 곡이 든 걸 알았을 때 안내 → 'split'(1곡씩 · 추천) · 'one'(한 악보로) · null(취소) */
+function omrMultiSongDialog(songs) {
+  // (쪽 번호는 안 보여 줘요: Audiveris가 한 쪽을 둘로 나눠 세는 일이 있어서 PDF 쪽 번호와 다를 수 있어요)
+  return new Promise(res => modal(`<h2>${LG(`악보가 ${songs.length}곡 들어 있어요`, `This file has ${songs.length} songs`, `楽譜が${songs.length}曲入っています`)}</h2>
+    <p>${LG('여러 곡을 한 번에 하나의 악보로 변환하면 곡마다 다른 <b>박자·조성·제목이 섞이는 오류</b>가 생길 수 있어요.', 'Converting several songs into one score can <b>mix up time signatures, keys and titles</b> between songs.', '複数の曲を一つの楽譜に変換すると、曲ごとの<b>拍子・調・タイトルが混ざる誤り</b>が起きることがあります。')}</p>
+    <p>${LG('그래서 <b>1곡씩 나눠서 자동 변환</b>하고, 변환된 악보는 <b>곡 이름으로 내 악보함에 저장</b>할게요.', 'So each song is <b>converted separately</b> and <b>saved to My scores by its title</b>.', 'そのため<b>1曲ずつ分けて変換</b>し、<b>曲名でマイ楽譜に保存</b>します。')}</p>
+    <ol class="omr-songs" data-notr>${songs.map((sg, k) => `<li><b>${esc(omrSongName(sg, k))}</b> <span class="muted small">${LG(`${sg.measures}마디`, `${sg.measures} measures`, `${sg.measures}小節`)}</span></li>`).join('')}</ol>
+    <p class="muted small">${LG('곡 이름은 글자 인식으로 읽어서 틀릴 수 있어요. 저장한 뒤 내 악보함에서 ✎로 고칠 수 있어요.', 'Titles are read by text recognition and may be wrong. Rename them in My scores (✎).', '曲名は文字認識なので間違うことがあります。マイ楽譜の✎で直せます。')}</p>
+    <div class="modal-btns"><button class="btn" data-close>${LG('취소', 'Cancel', 'キャンセル')}</button><button class="btn" data-one>${LG('한 악보로 합쳐서 열기', 'Open as one score', '一つの楽譜で開く')}</button><button class="btn primary" data-split>${LG('1곡씩 나눠서 변환 · 저장', 'Convert & save each song', '1曲ずつ変換・保存')}</button></div>`, md => {
+    md.querySelector('[data-split]').addEventListener('click', () => { App.onModalClose = null; closeModal(); res('split'); });
+    md.querySelector('[data-one]').addEventListener('click', () => { App.onModalClose = null; closeModal(); res('one'); });
+    App.onModalClose = () => res(null);
+  }));
+}
+/** 곡마다: 다듬기 → 악보 만들기 → 내 악보함에 곡 이름으로 저장 → 첫 곡을 열고 결과 알려 주기 */
+async function omrSaveSongs(songs, lyrics) {
+  const busy = $('#pdfBusy');
+  if (busy) { busy.hidden = false; busy.querySelector('b').textContent = LG('1곡씩 나눠서 변환하는 중…', 'Converting each song…', '1曲ずつ変換中…'); }
+  let swing = false;
+  try { swing = await detectSwing(Pdf.file); } catch (e) { }
+  const done = [];
+  for (let k = 0; k < songs.length; k++) {
+    const sg = songs[k], name = omrSongName(sg, k);
+    if (busy) busy.querySelector('span').textContent = `${k + 1} / ${songs.length} · ${name}`;
+    try {
+      let xml = sg.xml;
+      try { xml = omrForImport(xml, { lyrics }); } catch (e) { console.error(e); }
+      const s = importMusicXML(xml);
+      s.title = name;
+      try { refitLines(s); } catch (e) { console.error(e); }
+      if (swing) s.swing = true;
+      const r = await Lib.save(s, null);
+      if (!r || r.error) done.push({ name, ok: false, why: r && r.error === 'full' ? LG('내 악보함이 꽉 찼어요', 'My scores is full', 'マイ楽譜がいっぱいです') : LG('저장하지 못했어요', 'Could not save', '保存できませんでした') });
+      else done.push({ name, ok: true, id: r.id, s, measures: s.measures.length, lyr: s.measures.some(m => Object.values(m.lyrics || {}).some(Boolean)) });
+    } catch (e) {
+      console.error(e);
+      done.push({ name, ok: false, why: LG('악보로 만들지 못했어요: ', 'Could not build the score: ', '楽譜にできませんでした: ') + e.message });
+    }
+  }
+  if (busy) busy.hidden = true;
+  // 첫 번째로 저장된 곡을 편집 화면에 열어요
+  const first = done.find(d => d.ok);
+  if (first) {
+    leavePdfOnly();
+    if (Pdf.solOn) pdfSolOff();
+    stopPlay(); if (!App.blank) History.push(App.s);
+    App.s = first.s; App.sel = []; App.selMeasures = []; App.playStart = { m: 0, t: 0 }; App.verse = 0; App.fileHandle = null; App.nativePath = null; App.libId = first.id;
+    if (App.blank) leaveBlank();
+    if (Native()) Native().set_title(first.name);
+    buildSubbar(); changed();
+  }
+  const okN = done.filter(d => d.ok).length;
+  modal(`<h2>${okN === done.length ? LG(`${okN}곡을 내 악보함에 저장했어요`, `Saved ${okN} songs to My scores`, `${okN}曲をマイ楽譜に保存しました`) : LG(`${done.length}곡 중 ${okN}곡을 저장했어요`, `Saved ${okN} of ${done.length} songs`, `${done.length}曲中${okN}曲を保存しました`)}</h2>
+    <ol class="omr-songs" data-notr>${done.map(d => `<li>${d.ok ? '✓' : '✗'} <b>${esc(d.name)}</b> <span class="muted small">${d.ok ? LG(`${d.measures}마디`, `${d.measures} measures`, `${d.measures}小節`) + (lyrics ? ' · ' + (d.lyr ? LG('가사 있음', 'lyrics', '歌詞あり') : LG('가사 못 찾음', 'no lyrics found', '歌詞なし')) : '') : esc(d.why)}</span></li>`).join('')}</ol>
+    ${first ? `<p class="muted small">${LG(`지금 화면에는 첫 곡 「${esc(first.name)}」을 열었어요. 다른 곡은 파일 ▾ → 내 악보함에서 열어요. 틀린 음·박자는 PDF를 보며 고쳐 주세요.`, `The first song "${esc(first.name)}" is open now. Open the others from File ▾ → My scores.`, `最初の曲「${esc(first.name)}」を開きました。他の曲は ファイル ▾ → マイ楽譜 から開けます。`)}</p>` : ''}
+    <div class="modal-btns"><button class="btn" data-lib>${LG('내 악보함 열기', 'Open My scores', 'マイ楽譜を開く')}</button><button class="btn primary" data-close>${LG('확인', 'OK', 'OK')}</button></div>`, md => {
+    md.querySelector('[data-lib]').addEventListener('click', () => { closeModal(); libraryDialog(); });
+  });
+  return done;
 }
 /* ----- PDF 위에 바로 계이름 ----- */
 async function pdfSolfa() {
