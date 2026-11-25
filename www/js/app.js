@@ -2279,8 +2279,13 @@ async function getOmrXml(want) {
   want = want || {};
   if (want.lyrics && want.lyrics !== 'en') want.lyrics = 'ko';
   if (!Pdf.file) { toast('먼저 PDF 악보를 여세요'); return null; }
-  if (want.lyrics ? Pdf.omrLyr && Pdf.omrLyrLang === want.lyrics : Pdf.omrXml) return want.lyrics ? Pdf.omrLyr : Pdf.omrXml;
-  if (!want.lyrics && Pdf.omrLyr) return Pdf.omrLyr;
+  if (want.engine) {             // 새 엔진은 곡 목록(Pdf.omrSongs)을 따로 남겨요
+    if (Pdf.omrSongs && Pdf.omrSongsKey === (want.lyrics || 'none')) return Pdf.omrSongs[0].xml;
+    Pdf.omrSongs = null;
+  } else {
+    if (want.lyrics ? Pdf.omrLyr && Pdf.omrLyrLang === want.lyrics : Pdf.omrXml) return want.lyrics ? Pdf.omrLyr : Pdf.omrXml;
+    if (!want.lyrics && Pdf.omrLyr) return Pdf.omrLyr;
+  }
   const api = OmrApi();
   if (!api || !api.omr_status) { modal(`<h2>자동 인식</h2><p>자동 인식은 <b>바탕화면 프로그램</b>(BFlat Studio)에서만 돼요. 브라우저에서는 PDF를 옆에 띄워 보면서 쓸 수 있어요.</p><div class="modal-btns"><button class="btn primary" data-close>확인</button></div>`); return null; }
   const st = await api.omr_status();
@@ -2294,7 +2299,8 @@ async function getOmrXml(want) {
   }
   busy.hidden = false;
   try {
-    const res = await api.omr_pdf(await blobToB64(Pdf.file), Pdf.name, want.lyrics || false);
+    if (want.engine && !remote) { busy.querySelector('b').textContent = LG('새 엔진으로 악보 인식 중…', 'Recognizing with the new engine…', '新しいエンジンで認識中…'); busy.querySelector('span').textContent = LG('제목·가사·코드까지 읽어요 · 한 쪽에 30초~1분쯤 걸려요', 'Reads title, lyrics and chords too · about 30 s–1 min per page', 'タイトル・歌詞・コードも読みます · 1ページ30秒〜1分'); }
+    const res = await api.omr_pdf(await blobToB64(Pdf.file), Pdf.name, want.lyrics || false, !!want.engine);
     if (remote && res && (['net', 'timeout', 'http', 'lost', 'code', 'blocked'].includes(res.error) || /^cloud/.test(res.error || ''))) {
       if (res.error !== 'timeout') PcLink.okAt = 0;
       const cloud = /^cloud/.test(res.error);
@@ -2302,10 +2308,19 @@ async function getOmrXml(want) {
       return null;
     }
     if (!res || res.error) {
-      const why = res && (res.detail || res.log);
+      const why = res && (res.detail || (Array.isArray(res.log) ? res.log.join('\n') : res.log));
       modal(`<h2>${LG('자동 인식이 안 됐어요', 'Recognition failed', '自動認識できませんでした')}</h2><p>${esc(omrFailText(res))}</p>${why ? `<details><summary>${LG('인식 프로그램 기록 (자세히)', 'Recognizer log (details)', '認識プログラムの記録 (詳しく)')}</summary><pre class="omr-log">${esc(why)}</pre></details>` : ''}<div class="modal-btns"><button class="btn primary" data-close>${LG('확인', 'OK', 'OK')}</button></div>`, null, 'wide');
       return null;
     }
+    // 새 인식 엔진 결과: 곡마다 따로 (제목·가사·코드를 한글 글자 인식으로 읽어 넣었어요)
+    if (Array.isArray(res.songs) && res.songs.length) {
+      Pdf.omrSongs = res.songs.map(sg => { let x = sg.xml; try { x = fixOmrXml(x); } catch (e) { console.error(e); } return Object.assign({}, sg, { xml: x }); });
+      Pdf.omrSongsKey = want.lyrics || 'none';
+      Pdf.omrEngineLog = res.log || [];
+      Pdf.omrCount = 1;
+      return Pdf.omrSongs[0].xml;
+    }
+    if (want.engine && res.engineMissing) toast(LG('새 인식 엔진이 아직 설치되지 않아 예전 방식으로 인식했어요 · PC 프로그램에서 한 번 설치해 주세요', 'The new engine is not installed yet, so the old method was used · install it once in the PC program', '新しい認識エンジンが未インストールのため従来の方法で認識しました'), 5200);
     const f = b64ToFile(res);
     const raw = /\.mxl$/i.test(res.name) ? await unzipMxl(await f.arrayBuffer()) : await f.text();
     let xml;
@@ -2316,7 +2331,7 @@ async function getOmrXml(want) {
     return xml;
   } finally {
     busy.hidden = true;
-    if (remote) { busy.querySelector('b').textContent = '악보 인식 중…'; busy.querySelector('span').textContent = '페이지 수에 따라 몇 분 걸릴 수 있어요'; }
+    if (remote || want.engine) { busy.querySelector('b').textContent = '악보 인식 중…'; busy.querySelector('span').textContent = '페이지 수에 따라 몇 분 걸릴 수 있어요'; }
   }
 }
 /**
@@ -2436,16 +2451,23 @@ async function pdfRecognize() {
   const api = OmrApi();
   if (lyrics && api && api.ocr_install) { const o = await ensureOcr(); if (o === null) return; if (!o) lyrics = false; }
   if (lyrics) lyrics = lyrLang;          // 'ko' · 'en' → 글자 인식 주 언어 (omrcore.order_langs)
-  const raw = await getOmrXml({ lyrics }); if (!raw) return;
+  const engine = await ensureEngine(api); if (engine === null) return;
+  const raw = await getOmrXml({ lyrics, engine }); if (!raw) return;
   // 여러 곡이 든 PDF(찬송가 책 등) → 안내하고 1곡씩 나눠서 변환 · 내 악보함에 곡 이름으로 저장
   let songs = [];
-  try { songs = omrSplitSongs(raw); } catch (e) { console.error(e); }
+  if (engine && Pdf.omrSongs) songs = Pdf.omrSongs.map(sg => ({ xml: sg.xml, title: sg.title, pages: sg.pages || [1, 1], measures: sg.measures, engine: sg.engine }));
+  else { try { songs = omrSplitSongs(raw); } catch (e) { console.error(e); } }
   if (songs.length > 1) {
     const how = await omrMultiSongDialog(songs);
     if (!how) return;
     if (how === 'split') return omrSaveSongs(songs, lyrics);
   }
-  let xml = raw;
+  let xml = songs.length === 1 && engine && Pdf.omrSongs ? songs[0].xml : raw;
+  if (songs.length > 1 && engine && Pdf.omrSongs) {
+    // 한 악보로 합치기: 새 엔진은 곡마다 따로 만들어서, 예전 방식(Audiveris 한 번)으로 다시 인식해요
+    toast(LG('한 악보로 합치려고 예전 방식으로 한 번 더 인식해요', 'Recognizing once more with the old method to combine', '一つにまとめるため従来の方法で再認識します'), 4000);
+    xml = await getOmrXml({ lyrics }); if (!xml) return;
+  }
   try { xml = omrForImport(raw, { lyrics }); } catch (e) { console.error(e); }
   const swing = await detectSwing(Pdf.file);
   leavePdfOnly();
@@ -2459,6 +2481,43 @@ async function pdfRecognize() {
   const gotLyr = lyrics && App.s.measures.some(m => Object.values(m.lyrics || {}).some(Boolean));
   const msg = Pdf.omrCount > 1 ? `인식했어요 (악장 ${Pdf.omrCount}개 중 첫 번째)` : '인식했어요';
   toast(msg + (lyrics ? (gotLyr ? ' · 가사도 넣었어요' : ' · 가사는 찾지 못했어요') : '') + ' · 틀린 곳은 옆의 PDF를 보며 고쳐 주세요', 4600);
+}
+/**
+ * 새 인식 엔진 쓸까? → true(새 엔진) · false(예전 방식) · null(취소)
+ *  - 휴대폰: 항상 요청해요 (클라우드는 늘 있고, PC에 없으면 PC가 예전 방식으로 하고 알려 줘요)
+ *  - PC: 설치돼 있으면 바로 · 없으면 설치할지 물어봐요 (처음 한 번 · 몇 분)
+ */
+async function ensureEngine(api) {
+  if (!api) return false;
+  if (api === MobileOmr) return true;
+  if (!api.engine_status) return false;
+  let st; try { st = await api.engine_status(); } catch (e) { return false; }
+  if (st && st.ok) return true;
+  let skip = false; try { skip = localStorage.getItem('bflat.engineSkip') === '1'; } catch (e) { }
+  if (skip) return false;
+  const how = await new Promise(res => modal(`<h2>${LG('더 정확한 새 인식 엔진', 'A more accurate recognition engine', 'より正確な新しい認識エンジン')}</h2>
+    <p>${LG('책을 스캔한 찬송가처럼 <b>오선 사이에 가사가 여러 줄</b> 있는 악보를 훨씬 정확하게 읽어요. <b>제목 · 1~5절 가사 · 코드</b>를 한글 글자 인식으로 읽어서 음표마다 넣고, 음표는 인공지능(homr)과 Audiveris 중 더 정확한 쪽을 골라요.', 'Reads scores with <b>several lines of lyrics between the staves</b> (e.g. scanned hymnals) much more accurately: <b>title, verses and chords</b> by Korean text recognition, and notes by the better of an AI engine (homr) and Audiveris.', '五線の間に歌詞が何行もある楽譜をより正確に読みます。')}</p>
+    <p class="muted small">${st && st.python ? LG('처음 한 번 설치가 필요해요 · 인터넷으로 약 500MB를 받고 5~10분쯤 걸려요. 설치하는 동안 프로그램을 닫지 마세요.', 'Needs a one-time install · about 500 MB download, 5–10 minutes. Keep the program open.', '初回のみインストールが必要です · 約500MB、5〜10分') : LG('이 PC에 파이썬(3.10~3.12)이 없어서 설치할 수 없어요. python.org 에서 파이썬을 설치하면 쓸 수 있어요. 지금은 예전 방식으로 인식해요.', 'Python 3.10–3.12 is not installed on this PC, so the engine cannot be installed (get it from python.org). Using the old method now.', 'このPCにPython(3.10〜3.12)がないためインストールできません')}</p>
+    <div class="modal-btns"><button class="btn" data-old>${LG('이번엔 예전 방식으로', 'Use the old method', '今回は従来の方法')}</button><button class="btn" data-never>${LG('다시 묻지 않기', "Don't ask again", '今後表示しない')}</button>${st && st.python ? `<button class="btn primary" data-inst>${LG('설치하고 인식 (추천)', 'Install and recognize (recommended)', 'インストールして認識')}</button>` : ''}</div>`, md => {
+    const b = (sel, v) => { const el = md.querySelector(sel); if (el) el.addEventListener('click', () => { App.onModalClose = null; closeModal(); res(v); }); };
+    b('[data-old]', 'old'); b('[data-never]', 'never'); b('[data-inst]', 'inst');
+    App.onModalClose = () => res(null);
+  }));
+  if (how === null) return null;
+  if (how === 'never') { try { localStorage.setItem('bflat.engineSkip', '1'); } catch (e) { } return false; }
+  if (how !== 'inst') return false;
+  const busy = $('#pdfBusy');
+  busy.querySelector('b').textContent = LG('새 인식 엔진 설치 중…', 'Installing the new engine…', '新しいエンジンをインストール中…');
+  busy.querySelector('span').textContent = LG('약 500MB를 받아요 · 5~10분쯤 걸려요 · 프로그램을 닫지 마세요', 'Downloading about 500 MB · 5–10 minutes · keep the program open', '約500MBをダウンロード · 5〜10分');
+  busy.hidden = false;
+  let r;
+  try { r = await api.engine_install(); } catch (e) { r = { error: 'run', log: [String(e)] }; }
+  busy.hidden = true;
+  busy.querySelector('b').textContent = '악보 인식 중…'; busy.querySelector('span').textContent = '페이지 수에 따라 몇 분 걸릴 수 있어요';
+  if (r && r.ok) { toast(LG('새 인식 엔진을 설치했어요', 'New engine installed', '新しいエンジンをインストールしました')); return true; }
+  const why = { python: LG('파이썬(3.10~3.12)을 찾지 못했어요', 'Python 3.10–3.12 not found', 'Pythonが見つかりません'), pip: LG('부품을 받지 못했어요 (인터넷 연결을 확인해 주세요)', 'Could not download the parts (check the internet)', '部品をダウンロードできませんでした'), models: LG('인공지능 모델을 받지 못했어요 (인터넷 연결을 확인해 주세요)', 'Could not download the AI models', 'AIモデルをダウンロードできませんでした'), timeout: LG('설치가 너무 오래 걸려서 멈췄어요', 'Install took too long', '時間がかかりすぎました') }[r && r.error] || LG('설치하지 못했어요', 'Install failed', 'インストールできませんでした');
+  await new Promise(res => modal(`<h2>${LG('새 엔진을 설치하지 못했어요', 'Could not install the new engine', 'インストールできませんでした')}</h2><p>${esc(why)} · ${LG('이번엔 예전 방식으로 인식할게요.', 'Using the old method this time.', '今回は従来の方法で認識します。')}</p>${r && r.log ? `<details><summary>${LG('자세히', 'Details', '詳しく')}</summary><pre class="omr-log">${esc([].concat(r.log).join('\n'))}</pre></details>` : ''}<div class="modal-btns"><button class="btn primary" data-close>${LG('확인', 'OK', 'OK')}</button></div>`, () => { App.onModalClose = () => res(); }, 'wide'));
+  return false;
 }
 /** 여러 곡 PDF: 곡 이름 (글자 인식으로 못 읽었으면 "파일 이름 (N번째 곡)") */
 function omrSongName(sg, k) {
@@ -2830,10 +2889,11 @@ const CloudOmr = {
     if (w.status === 404) return { error: 'cloudsetup' };
     return { ok: true };
   },
-  async omr(b64, lyrics, onTick) {
+  async omr(b64, lyrics, onTick, engine) {
     const c = this.get(); if (!c) return { error: 'cloudsetup' };
     const id = Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
-    const up = await this.gh(c, 'PUT', `/contents/inbox/${id}${lyrics === 'en' ? '.lyrics-en' : lyrics ? '.lyrics' : ''}.pdf`, { message: '인식 요청', content: b64 });
+    // 파일 이름 = 요청 내용: .lyrics(한글 가사) · .lyrics-en(영어 가사) · .x(새 인식 엔진)
+    const up = await this.gh(c, 'PUT', `/contents/inbox/${id}${lyrics === 'en' ? '.lyrics-en' : lyrics ? '.lyrics' : ''}${engine ? '.x' : ''}.pdf`, { message: '인식 요청', content: b64 });
     if (up.status !== 201 && up.status !== 200) return { error: this.err(up.status) };
     const t0 = Date.now();
     let fails = 0;
@@ -2883,17 +2943,19 @@ const MobileOmr = {
     if (!how) return { cancel: true };
     return this.omr_status();
   },
-  async omr_pdf(b64, name, lyrics) {
+  async omr_pdf(b64, name, lyrics, engine) {
     PcLink.awake(true);
     try {
       if (this.mode === 'pc') {
         const pc = PcLink.get(); if (!pc) return { error: 'net' };
-        return await PcLink.call(pc, 'omr_pdf', [b64, name, lyrics || false]);   // 'ko' · 'en' (예전 PC 프로그램은 true 로 받아요)
+        return await PcLink.call(pc, 'omr_pdf', [b64, name, lyrics || false, !!engine]);   // 'ko' · 'en' (예전 PC 프로그램은 true 로 받아요)
       }
       const span = $('#pdfBusy span');
       return await CloudOmr.omr(b64, lyrics, s => {
-        if (span) span.textContent = LG(`${Math.floor(s / 60)}분 ${s % 60}초 지남 · 보통 1~3분 걸려요 (처음 한 번은 조금 더) · 앱을 닫지 말고 기다려 주세요`, `${Math.floor(s / 60)}m ${s % 60}s · usually 1–3 min (a bit longer the first time) · keep the app open`, `${Math.floor(s / 60)}分${s % 60}秒経過 · 通常1〜3分 (初回は少し長め) · アプリを閉じずにお待ちください`);
-      });
+        if (span) span.textContent = engine
+          ? LG(`${Math.floor(s / 60)}분 ${s % 60}초 지남 · 새 엔진은 보통 3~6분 걸려요 (제목·가사·코드까지) · 앱을 닫지 말고 기다려 주세요`, `${Math.floor(s / 60)}m ${s % 60}s · the new engine usually takes 3–6 min · keep the app open`, `${Math.floor(s / 60)}分${s % 60}秒経過 · 新エンジンは通常3〜6分`)
+          : LG(`${Math.floor(s / 60)}분 ${s % 60}초 지남 · 보통 1~3분 걸려요 (처음 한 번은 조금 더) · 앱을 닫지 말고 기다려 주세요`, `${Math.floor(s / 60)}m ${s % 60}s · usually 1–3 min (a bit longer the first time) · keep the app open`, `${Math.floor(s / 60)}分${s % 60}秒経過 · 通常1〜3分 (初回は少し長め) · アプリを閉じずにお待ちください`);
+      }, engine);
     } finally { PcLink.awake(false); }
   },
   async ocr_install() {
