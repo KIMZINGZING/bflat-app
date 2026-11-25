@@ -815,6 +815,15 @@ function omrSplitSongs(text) {
       const p = +c.getAttribute('page') || 1;
       if (p < sg.pages[0] || p > sg.pages[1]) c.remove(); else c.setAttribute('page', String(p - sg.pages[0] + 1));
     });
+    // 작곡가·작사가(머리 정보)는 파일 전체에 하나뿐이라 그대로 두면 모든 곡에 첫 곡 것이 들어가요
+    //  → 이 곡 쪽에 적힌 것(credit-type)으로 바꾸고, 없으면 지워요
+    const ident = kids(r2, 'identification')[0];
+    if (ident) ['composer', 'lyricist'].forEach(role => {
+      kids(ident, 'creator').filter(c => c.getAttribute('type') === role).forEach(c => c.remove());
+      const cr = kids(r2, 'credit').find(c => kids(c, 'credit-type').some(t => t.textContent.trim() === role));
+      const tx = cr ? kids(cr, 'credit-words').map(w => w.textContent.trim()).join(' ').trim() : '';
+      if (tx) { const c = d2.createElement('creator'); c.setAttribute('type', role); c.textContent = tx; ident.insertBefore(c, ident.firstChild); }
+    });
     // 곡 이름
     kids(r2, 'work').forEach(w => w.remove()); kids(r2, 'movement-title').forEach(w => w.remove());
     if (sg.title) {
