@@ -272,6 +272,15 @@ function importMusicXML(text) {
     const cnt = {}; staves.forEach(st => cnt[st.name] = (cnt[st.name] || 0) + 1);
     const seen = {}; staves.forEach(st => { if (cnt[st.name] > 1 && !/\s\d$/.test(st.name)) { seen[st.name] = (seen[st.name] || 0) + 1; st.name += ' ' + seen[st.name]; st.short = shortInstName(st.name); } });
   }
+  // 악기 줄들 + 큰보표(높은음 + 낮은음) 하나 = 피아노·하프가 들어간 앙상블 (피아노 3중주 · 피아노 5중주 …)
+  if (s.type === 'custom') {
+    const gs = staves.filter(st => st.grp), ids = [...new Set(gs.map(st => st.grp))];
+    if (ids.length === 1 && gs.length === 2 && gs[1].clef === 'bass' && staves.some(st => !st.grp)) {
+      s.type = 'ensemble';
+      staves.forEach((st, k) => { if (st.grp) st.grp = 'piano'; else { st.grp = 'ens'; st.name = cleanPartName(st.name) || `Part ${k + 1}`; st.short = shortInstName(st.name); } });
+      gs[0].name = cleanPartName(gs[0].name) || 'Piano'; gs[0].short = shortInstName(gs[0].name); gs[1].name = ''; gs[1].short = '';
+    }
+  }
 
   let key = 0, num = 4, den = 4, firstAttr = true, maxVerse = 1, gotTempo = false;
   const typeMap = { whole: 'w', half: 'h', quarter: 'q', eighth: 'e', '16th': 's', '32nd': 's' };
