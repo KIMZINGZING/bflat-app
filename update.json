@@ -1,6 +1,6 @@
 {
- "version": "2a921439850e",
- "built": "2026-11-25 11:44",
+ "version": "21361c4dc7bf",
+ "built": "2026-11-25 12:54",
  "files": {
   "assets/apple-touch-icon.png": {
    "sha256": "e9aca0c2fe30a5f6300661decbd1d578c00c7c0cead84b40374e696224d6712f",
@@ -27,8 +27,8 @@
    "size": 1379
   },
   "css/style.css": {
-   "sha256": "b11c22fb22dcc5b2c6e62ea0f685af258807290cc6bf4e5b274934020e8374f6",
-   "size": 27976
+   "sha256": "6d5c6f8e6e3d87321b512778af710fb9f781f74bd75aa194fdd38d61fe00b011",
+   "size": 28198
   },
   "fonts/Griun_Yeeun-Rg.ttf": {
    "sha256": "866cfc5bfb52eacf4e39059524d719775895856eb94f170bcc4f4c89b2ae1aaa",
@@ -39,8 +39,8 @@
    "size": 4990
   },
   "js/app.js": {
-   "sha256": "f295676ad194ab72e461b6dcb0c93c01ca620f0ab22cfa4360c645018f6b7a42",
-   "size": 263214
+   "sha256": "72a8b5fce25967086b52a92b485303ce2c11f8ea8f8b6ca57dd753a38654de66",
+   "size": 263478
   },
   "js/audio.js": {
    "sha256": "1197d4458b423279714557c5e262103ef2e32ffd81672718c5a8a4d6a4eb69dc",
@@ -51,16 +51,16 @@
    "size": 13763
   },
   "js/i18n.js": {
-   "sha256": "2325e6d3b9ec000eb3336ecad45d91eac0e31801a564a9d6fef2f12b39a4f93d",
-   "size": 78366
+   "sha256": "ac1857ca6c457ad3a994475ce48008246abab0466c0ecceabc03e2c49bb51271",
+   "size": 81482
   },
   "js/io.js": {
-   "sha256": "51fbf1dfbd66178b6e34bb070853911e42ffc45190272c154116b72f48d12c7d",
-   "size": 89078
+   "sha256": "f2f9598eb638b9384a6086090976d11d61b461e1d5bdabf031beba6d30fabd5d",
+   "size": 89804
   },
   "js/model.js": {
-   "sha256": "e1b120fc97be9d4f24355873e9134f37bab2651aafe5fab48cca262395bfe233",
-   "size": 21818
+   "sha256": "08e5923cf19bef677394cc77fdf04117397aa22ba4ff23c996ac90871af627b4",
+   "size": 23148
   },
   "js/render.js": {
    "sha256": "45cc2832e1179c31d2966358b18eb4d45f90144d184a21c01a0102f5b73bd114",
@@ -82,5 +82,12 @@
    "sha256": "a8f3ba90c4c7b969fff476e6917c041868625544878c66b645f73cf41c44844a",
    "size": 1034
   }
+ },
+ "apk": {
+  "versionCode": 2,
+  "versionName": "1.1",
+  "path": "BFlatStudio.apk",
+  "sha256": "9236eed786eb99239cc6071f1d14bc4f5bdcab76b5dd4f21afb6d34b13bbd008",
+  "size": 1886224
  }
 }
