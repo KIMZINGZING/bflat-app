@@ -1,6 +1,6 @@
 {
- "version": "3591116caf88",
- "built": "2026-11-25 13:54",
+ "version": "e1d85a9bacd9",
+ "built": "2026-11-25 14:39",
  "files": {
   "assets/apple-touch-icon.png": {
    "sha256": "e9aca0c2fe30a5f6300661decbd1d578c00c7c0cead84b40374e696224d6712f",
@@ -39,8 +39,8 @@
    "size": 5067
   },
   "js/app.js": {
-   "sha256": "a482d63411fc56cfe47dd75ddc278750a5b460f7d0ad0d9b2f83b4cfcb47f970",
-   "size": 263862
+   "sha256": "b439527bb28d8d18c78e68412a3e944d178c0af34abce76d41790f568bbf0031",
+   "size": 265492
   },
   "js/audio.js": {
    "sha256": "1197d4458b423279714557c5e262103ef2e32ffd81672718c5a8a4d6a4eb69dc",
@@ -55,8 +55,8 @@
    "size": 27956
   },
   "js/docimport.js": {
-   "sha256": "9d32e9b3537ab707383fc1c7e118ae1aaa99c78f28f99460c8647bb5c4bdf1a9",
-   "size": 13763
+   "sha256": "5f789ead3262b747352d4f7705817003459fb09418dd083d84c32fd8df134654",
+   "size": 16393
   },
   "js/i18n.js": {
    "sha256": "ac1857ca6c457ad3a994475ce48008246abab0466c0ecceabc03e2c49bb51271",
@@ -95,7 +95,7 @@
   "versionCode": 3,
   "versionName": "1.2",
   "path": "BFlatStudio.apk",
-  "sha256": "74fc406b1225e5ecb6222d623fe32acfacd4d0ac29973b5fb79a596f61df67af",
+  "sha256": "6119b8275f73b2ad6d170b878cab2be753240c3e634bf59a29ba0fda991dbeb4",
   "size": 1898653
  }
 }
