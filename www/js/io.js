@@ -913,6 +913,77 @@ function omrTidyLyrics(doc, parts, kids) {
       }
     })));
   });
+  omrSplitHangul(parts, kids);
+}
+/**
+ * 붙어 읽힌 한글 가사 나누기: 글자 인식은 붙어 쓴 음절을 한 낱말("주께서나")로 읽고,
+ * Audiveris는 그 낱말을 가운데쯤 음표 하나에 붙여요. 한글 가사는 거의 한 음절에 한 음표라서
+ * 그 음표를 가운데로 앞뒤의 빈 자리에 한 음절씩 나눠 붙여요.
+ * 자리 = 같은 오선에서 왼쪽부터 음표가 놓인 가로 위치 하나 (Audiveris가 한 멜로디를 성부 여러 개로 나누거나
+ * 박자를 틀리게 읽는 일이 많아서, 성부·박자가 아니라 악보 위 가로 위치(default-x) 차례로 봐요 ·
+ * 붙임줄로 이어진 음·쉼표는 자리가 아니에요). 가로 위치가 없는 악보는 건드리지 않아요.
+ * 이미 가사가 있는 자리는 건드리지 않고, 자리가 모자라면 그대로 둬요.
+ */
+function omrSplitHangul(parts, kids) {
+  // 한글 가사 줄에 섞인 부스러기(얼룩·기호를 영어 글자로 읽은 "L", "J", "I", ":" 같은 것) 지우기:
+  //  같은 파트·같은 절에서 가사 대부분이 한글이면, 한글이 없는 짧은(2글자 이하) 가사는 빼요
+  parts.forEach(p => {
+    const byNo = {};
+    p.querySelectorAll('note > lyric').forEach(ly => { const no = ly.getAttribute('number') || '1'; (byNo[no] || (byNo[no] = [])).push(ly); });
+    Object.values(byNo).forEach(list => {
+      const txt = ly => kids(ly, 'text').map(t => t.textContent).join('').trim();
+      const ko = list.filter(ly => /[가-힣]/.test(txt(ly))).length;
+      if (ko < 3 || ko < list.length * 0.6) return;
+      list.forEach(ly => { const t = txt(ly); if (!/[가-힣0-9]/.test(t) && t.length <= 2) ly.remove(); });
+    });
+  });
+  parts.forEach(p => {
+    const slots = {};          // 오선 → [[같은 자리 음표들], ...] (왼쪽부터)
+    kids(p, 'measure').forEach(me => {
+      const here = {};
+      kids(me, 'note').forEach(el => {
+        if (kids(el, 'rest').length || kids(el, 'grace').length) return;
+        const x = parseFloat(el.getAttribute('default-x'));
+        if (!isFinite(x)) return;
+        const st = (kids(el, 'staff')[0] || {}).textContent || '1';
+        const list = here[st] || (here[st] = []);
+        const g = list.find(s => Math.abs(s.x - x) <= 8);     // 같은 세로줄(화음·다른 성부)
+        if (g) g.notes.push(el); else list.push({ x, notes: [el] });
+      });
+      Object.entries(here).forEach(([st, list]) => list.sort((a, b) => a.x - b.x).forEach(s => {
+        if (s.notes.every(n => kids(n, 'tie').some(t => t.getAttribute('type') === 'stop'))) return;
+        s.notes.me = me;
+        (slots[st] || (slots[st] = [])).push(s.notes);
+      }));
+    });
+    const vno = n => parseInt((kids(n, 'voice')[0] || {}).textContent || '1', 10) || 1;
+    const lyOf = (sl, no) => sl.some(n => kids(n, 'lyric').some(l => (l.getAttribute('number') || '1') === no));
+    const head = sl => sl.filter(n => !kids(n, 'chord').length).sort((a, b) => vno(a) - vno(b))[0] || sl[0];
+    Object.values(slots).forEach(list => list.forEach((sl, k) => sl.forEach(n => kids(n, 'lyric').forEach(ly => {
+      const te = kids(ly, 'text')[0]; if (!te) return;
+      const syl = [...te.textContent.trim()];
+      if (syl.length < 2 || syl.length > 12 || !syl.every(c => /[가-힣]/.test(c))) return;
+      const no = ly.getAttribute('number') || '1', L = syl.length;
+      const notes = list;
+      const free = j => j >= 0 && j < notes.length && (j === k || !lyOf(notes[j], no));
+      // 고르는 기준: ① 원래 음표의 마디를 덜 벗어나는 자리 ② 낱말 가운데가 원래 음표에 가까운 자리 ③ 같으면 뒤쪽
+      const spill = s => { let c = 0; for (let j = s; j < s + L; j++) if (notes[j].me !== notes[k].me) c++; return c; };
+      const score = s => spill(s) * 100 + Math.abs(s - (k - (L - 1) / 2));
+      let best = -1;
+      for (let s = k - L + 1; s <= k; s++) {
+        let ok = true; for (let j = s; j < s + L; j++) if (!free(j)) { ok = false; break; }
+        if (ok && (best < 0 || score(s) <= score(best))) best = s;
+      }
+      if (best < 0) return;
+      syl.forEach((c, i) => {
+        const tgt = best + i === k ? n : head(notes[best + i]);
+        const nl = tgt === n ? ly : ly.cloneNode(true);
+        kids(nl, 'text')[0].textContent = c;
+        const sy = kids(nl, 'syllabic')[0]; if (sy) sy.textContent = 'single';
+        if (tgt !== n) tgt.appendChild(nl);
+      });   // 원래 음표에는 제 차례 음절만 남아요 (같은 lyric 요소를 고쳐 써요)
+    }))));
+  });
 }
 /**
  * 글자 인식이 놓친 가사를 반복 구간에서 채우기 (예: 1절 "I _ know why" ← 반복된 곳 "I don't know why")
