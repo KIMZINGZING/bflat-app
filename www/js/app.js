@@ -3544,7 +3544,8 @@ function init() {
       onKey({ key: b.dataset.key, shiftKey: false, ctrlKey: false, metaKey: false, altKey: false, target: document.body, preventDefault() { }, stopPropagation() { } });
     });
     let hadZoom = false; try { hadZoom = !!localStorage.getItem('bflat.zoom'); } catch (e) { }
-    if (!hadZoom && innerWidth < 760) App.zoom = Math.max(.3, Math.floor((innerWidth - 12) / L.PW * 100) / 100);
+    // 휴대폰·태블릿(세로 화면)처럼 악보 쪽이 화면보다 넓으면 화면 폭에 맞춰요 (갤럭시 탭 세로 ≈ 800px)
+    if (!hadZoom && innerWidth < L.PW + 40) App.zoom = Math.max(.3, Math.floor((innerWidth - 12) / L.PW * 100) / 100);
   }
   document.addEventListener('mousedown', e => { if (!e.__bflat && !e.target.closest('.pop')) closePop(); });
   $('#scroller').addEventListener('wheel', e => { if (e.ctrlKey) { e.preventDefault(); setZoom(App.zoom + (e.deltaY < 0 ? .1 : -.1)); } }, { passive: false });
