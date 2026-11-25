@@ -2253,6 +2253,26 @@ function closePdf() {
   $('#pdfSolView').innerHTML = ''; $('#pdfSolBar').hidden = true;
   if (App.pdfOnly) { leavePdfOnly(); if (App.blank) scoreTypeDialog(true); }
 }
+/** 자동 인식 실패 → 진짜 이유 (omrcore.py 가 Audiveris 기록을 읽어서 reason · pages 로 알려 줘요) */
+function omrFailText(res) {
+  const r = (res && (res.reason || res.error)) || '';
+  const pg = res && Array.isArray(res.pages) && res.pages.length ? res.pages.join(', ') : '';
+  const where = pg ? LG(`${pg}쪽: `, `Page ${pg}: `, `${pg}ページ: `) : '';
+  const t = {
+    notfound: LG('이 PC에서 인식 프로그램(Audiveris)을 찾지 못했어요 · 설치되어 있는지 확인해 주세요', 'The recognizer (Audiveris) was not found on this PC · check that it is installed', '認識プログラム(Audiveris)が見つかりません · インストールされているか確認してください'),
+    timeout: LG('인식이 너무 오래 걸려서 멈췄어요 · 페이지 수를 줄여서(필요한 쪽만) 다시 해 보세요', 'Recognition took too long and was stopped · try again with fewer pages', '認識に時間がかかりすぎて止めました · ページ数を減らしてもう一度お試しください'),
+    run: LG('인식 프로그램을 실행하지 못했어요', 'Could not start the recognizer', '認識プログラムを起動できませんでした'),
+    pdf: LG('PDF 파일을 열지 못했어요 · 암호가 걸렸거나 파일이 깨졌을 수 있어요. 스캔 앱에서 PDF를 다시 저장해 보세요', 'Could not open the PDF · it may be password-protected or damaged. Try saving it again from the scanner app', 'PDFを開けませんでした · パスワード付きか壊れている可能性があります。スキャンアプリで保存し直してください'),
+    toolarge: LG('PDF 페이지가 너무 커서(스캔 앱이 페이지를 아주 크게 만들어요) 인식 프로그램이 받지 못했어요 · 최신 PC 프로그램은 알맞은 크기로 줄여서 넘겨요. PC 프로그램을 최신으로 한 번 켜 주세요 (클라우드도 그때 함께 갱신돼요)', 'The PDF page is too large for the recognizer (scanner apps make huge pages) · the latest PC program shrinks pages first. Open the latest PC program once (it also updates the cloud)', 'PDFのページが大きすぎて認識できません (スキャンアプリはページをとても大きく作ります) · 最新のPCプログラムは適切な大きさに縮めて渡します。最新のPCプログラムを一度起動してください'),
+    memory: LG('인식하다 메모리가 모자랐어요 · 페이지를 나눠서(몇 쪽씩) 다시 해 보세요', 'Ran out of memory while recognizing · split the PDF into fewer pages and try again', '認識中にメモリが足りなくなりました · ページを分けてもう一度お試しください'),
+    lowres: LG('오선 간격이 너무 좁게 읽혔어요 (해상도가 낮아요) · 300dpi 이상으로 스캔하거나 더 크게 찍어 주세요', 'The staff lines are too close together (low resolution) · scan at 300 dpi or more, or take a closer photo', '五線の間隔が狭すぎます (解像度が低い) · 300dpi以上でスキャンするか大きく撮ってください'),
+    highres: LG('오선 간격이 너무 넓게 읽혔어요 · 악보가 아닌 페이지(표지·글)이거나 한 부분만 크게 확대된 그림일 수 있어요', 'The staff spacing looks far too large · the page may not be music (cover/text) or is a big close-up', '五線の間隔が広すぎます · 楽譜でないページか、一部を大きく拡大した画像かもしれません'),
+    nostaff: LG('이 페이지에서 오선(악보)을 찾지 못했어요 · 글만 있는 페이지거나, 너무 흐리거나 기울어진 스캔일 수 있어요', 'No staves (music) found on this page · it may be text only, or the scan is too blurry or tilted', 'このページで五線(楽譜)が見つかりません · 文字だけのページか、ぼやけ・傾きが強いスキャンかもしれません'),
+    format: LG('인식 프로그램이 이 파일 형식을 읽지 못했어요', 'The recognizer cannot read this file type', '認識プログラムがこの形式を読めません'),
+    server: (res && res.log) || LG('GitHub 서버에서 인식 준비에 실패했어요', 'The GitHub server failed to prepare recognition', 'GitHubサーバーで認識の準備に失敗しました'),
+  }[r];
+  return where + (t || LG('이 PDF에서 악보를 읽지 못했어요 · 아래 "자세히"에 인식 프로그램이 남긴 이유가 있어요', 'Could not read music from this PDF · the recognizer\'s reason is under "details" below', 'このPDFから楽譜を読めませんでした · 下の「詳しく」に理由があります'));
+}
 /** 인식 결과 (한 번 인식하면 다시 안 돌려요 · 가사까지 읽은 결과는 따로 남겨요)
  *  want.lyrics = true → 가사까지 읽은 결과가 필요해요 / 없으면 아무 결과나 */
 async function getOmrXml(want) {
@@ -2281,7 +2301,8 @@ async function getOmrXml(want) {
       return null;
     }
     if (!res || res.error) {
-      modal(`<h2>자동 인식이 안 됐어요</h2><p>${res && res.error === 'notfound' ? 'Audiveris를 찾지 못했어요.' : '이 PDF에서 악보를 읽지 못했어요. 스캔이 흐리거나 손글씨면 잘 안 될 수 있어요.'}</p>${res && res.log ? `<pre class="omr-log">${esc(res.log)}</pre>` : ''}<div class="modal-btns"><button class="btn primary" data-close>확인</button></div>`, null, 'wide');
+      const why = res && (res.detail || res.log);
+      modal(`<h2>${LG('자동 인식이 안 됐어요', 'Recognition failed', '自動認識できませんでした')}</h2><p>${esc(omrFailText(res))}</p>${why ? `<details><summary>${LG('인식 프로그램 기록 (자세히)', 'Recognizer log (details)', '認識プログラムの記録 (詳しく)')}</summary><pre class="omr-log">${esc(why)}</pre></details>` : ''}<div class="modal-btns"><button class="btn primary" data-close>${LG('확인', 'OK', 'OK')}</button></div>`, null, 'wide');
       return null;
     }
     const f = b64ToFile(res);
