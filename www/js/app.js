@@ -1824,8 +1824,9 @@ function settingsDialog(tab) {
   const winPct = Math.round((st.winAlpha || 1) * 100);
   const opt = (name, v, label, swatch) => `<button class="opt${st[name] === v ? ' on' : ''}" data-opt="${name}" data-v="${v}">${swatch}<span>${label}</span></button>`;
   modal(`<h2>설정</h2>
-  <div class="tabs"><button data-tab="screen">화면 · 언어</button><button data-tab="general">소리 · 글꼴</button><button data-tab="phone">휴대폰 앱</button></div>
+  <div class="tabs"><button data-tab="screen">화면 · 언어</button><button data-tab="general">소리 · 글꼴</button><button data-tab="phone">휴대폰 앱</button>${typeof Auth !== 'undefined' && Auth.on() ? `<button data-tab="account">${LG('계정', 'Account', 'アカウント')}</button>` : ''}</div>
   <div class="tab-pane" data-pane="phone" id="phonePane"></div>
+  <div class="tab-pane" data-pane="account" id="accountPane"></div>
   <div class="tab-pane" data-pane="general">
     <label class="chk"><input type="checkbox" id="sAcc"${st.chordAccomp ? ' checked' : ''}> 코드 반주 — 재생할 때 코드 이름으로 화음·베이스도 울려요</label>
     <div class="row2"><label class="fld">음색<select class="inp" id="sTim"><option value="piano">피아노</option><option value="organ">오르간</option><option value="sine">부드러운 소리</option></select></label>
@@ -1856,7 +1857,7 @@ function settingsDialog(tab) {
   </div>
   <div class="modal-btns"><button class="btn" data-close>취소</button><button class="btn primary" data-ok>저장</button></div>`, md => {
     $('#sTim', md).value = st.timbre; $('#sFont', md).value = st.scoreFont;
-    const show = name => { $$('[data-tab]', md).forEach(b => b.classList.toggle('on', b.dataset.tab === name)); $$('[data-pane]', md).forEach(p => p.hidden = p.dataset.pane !== name); if (name === 'phone') phonePane($('#phonePane', md)); };
+    const show = name => { $$('[data-tab]', md).forEach(b => b.classList.toggle('on', b.dataset.tab === name)); $$('[data-pane]', md).forEach(p => p.hidden = p.dataset.pane !== name); if (name === 'phone') phonePane($('#phonePane', md)); if (name === 'account') Auth.pane($('#accountPane', md)); };
     $$('[data-tab]', md).forEach(b => b.addEventListener('click', () => show(b.dataset.tab)));
     show(tab || 'screen');
     // 고르면 바로 미리 보기
@@ -3383,8 +3384,8 @@ function init() {
   window.addEventListener('beforeunload', () => { if (App.blank) return; try { localStorage.setItem('bflat.autosave', JSON.stringify(App.s)); } catch (e) { } });
   buildSubbar();
   render();
-  // 첫 화면: 백지 + 새 악보 창 (지난 작업은 "이전 작업 이어서"로)
-  scoreTypeDialog(true);
+  // 첫 화면: (처음이면 회원 가입·로그인 → ) 백지 + 새 악보 창 (지난 작업은 "이전 작업 이어서"로)
+  if (typeof Auth !== 'undefined') Auth.gate(() => scoreTypeDialog(true)); else scoreTypeDialog(true);
   // 글꼴이 늦게 로드되면 다시 그리기
   if (document.fonts) document.fonts.ready.then(() => render());
 }
