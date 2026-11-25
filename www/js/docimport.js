@@ -157,20 +157,54 @@ async function loadBitmap(blob) {
   }
 }
 /**
+ * 그림에서 오선 간격(줄과 줄 사이, 원래 그림의 픽셀) 재기 → 숫자 또는 null(오선을 못 찾음)
+ * 자동 인식(Audiveris)은 오선 간격이 너무 좁은 그림(인터넷에서 받은 작은 그림 등)을 잘 못 읽어요.
+ * 시험해 보니: 약 9px 이상이면 잘 읽고, 6~7px 이하면 마디·박자·가사를 많이 틀려요 (키워서 넣어도 비슷해요)
+ */
+function estimateInterline(src) {
+  try {
+    const W0 = src.width, H0 = src.height, sc = Math.min(1, 2400 / W0), W = Math.round(W0 * sc), H = Math.round(H0 * sc);
+    const cv = document.createElement('canvas'); cv.width = W; cv.height = H;
+    const ctx = cv.getContext('2d', { willReadFrequently: true });
+    ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, W, H); ctx.drawImage(src, 0, 0, W, H);
+    const d = ctx.getImageData(0, 0, W, H).data;
+    // 가로줄마다 어두운 점 비율 → 오선(길게 가로지르는 줄)이 있는 줄
+    const rows = new Float32Array(H);
+    for (let y = 0; y < H; y++) { let c = 0; for (let x = 0, i = y * W * 4; x < W; x++, i += 4) if (d[i] * .299 + d[i + 1] * .587 + d[i + 2] * .114 < 185) c++; rows[y] = c / W; }
+    const centers = []; let s = -1, ws = 0, ys = 0;
+    for (let y = 0; y <= H; y++) {
+      if (y < H && rows[y] > 0.22) { if (s < 0) { s = y; ws = 0; ys = 0; } ws += rows[y]; ys += rows[y] * y; }
+      else if (s >= 0) { centers.push(ys / ws); s = -1; }
+    }
+    const diffs = []; for (let i = 1; i < centers.length; i++) { const g = centers[i] - centers[i - 1]; if (g > 1.5 && g < H / 15) diffs.push(g); }
+    if (diffs.length < 4) return null;
+    diffs.sort((a, b) => a - b);
+    // 오선 안의 간격 = 가장 흔한 작은 간격
+    const low = diffs.slice(0, Math.max(4, Math.ceil(diffs.length * 0.6))), med = low[Math.floor(low.length / 2)];
+    const near = diffs.filter(g => Math.abs(g - med) <= med * 0.2);
+    if (near.length < 4) return null;
+    return near.reduce((a, b) => a + b, 0) / near.length / sc;
+  } catch (e) { return null; }
+}
+/**
  * 그림들 → 한 장에 한 쪽인 PDF (JPEG로 넣어요)
- *  - 가로가 2000px보다 작으면 키워요 (캡처 악보는 오선 간격이 좁아서 인식이 잘 안 돼요)
+ *  - 오선 간격이 18px보다 좁으면 그만큼 키워요 (캡처·작은 그림은 오선 간격이 좁아서 인식이 잘 안 돼요)
  *  - 아주 작은 그림(가로·세로 200px 미만: 아이콘·도장 등)은 빼요
  * → { blob, pages, skipped }
  */
 async function imagesToPdf(blobs) {
   const pages = [];
-  let skipped = 0;
+  let skipped = 0, space = null, srcW = 0;
   for (const b of blobs) {
     let bmp;
     try { bmp = await loadBitmap(b); } catch (e) { skipped++; continue; }
     const w0 = bmp.width, h0 = bmp.height;
     if (w0 < 200 || h0 < 200) { skipped++; continue; }
-    const scale = Math.min(4, Math.max(1, 2000 / w0)), w = Math.round(w0 * scale), h = Math.round(h0 * scale);
+    const sp = estimateInterline(bmp);
+    if (sp && (space === null || sp < space)) { space = sp; srcW = w0; }          // 가장 작은 쪽 기준
+    // 키우는 정도: 오선 간격이 약 18px가 되게 (시험: 이렇게 하면 같은 악보 PDF와 결과가 거의 같아요 ·
+    //   가로 2000px에 맞추던 예전 방식은 어떤 크기(예: 가로 1500px 캡처)에서 줄을 잘못 묶었어요) · 오선을 못 찾으면 예전처럼 가로 2000px
+    const scale = sp ? Math.min(4, Math.max(1, 18 / sp)) : Math.min(4, Math.max(1, 2000 / w0)), w = Math.round(w0 * scale), h = Math.round(h0 * scale);
     if (w * h > 40e6) { skipped++; continue; }
     const cv = document.createElement('canvas'); cv.width = w; cv.height = h;
     const ctx = cv.getContext('2d');
@@ -184,7 +218,7 @@ async function imagesToPdf(blobs) {
     if (bmp.close) bmp.close();
   }
   if (!pages.length) return { blob: null, pages: 0, skipped };
-  return { blob: jpegPagesToPdf(pages), pages: pages.length, skipped };
+  return { blob: jpegPagesToPdf(pages), pages: pages.length, skipped, space, srcW };
 }
 function jpegPagesToPdf(pages) {
   const enc = new TextEncoder(), parts = [], offs = [];
@@ -230,5 +264,5 @@ async function scoreSourceToPdf(file) {
   } else return { error: 'type' };
   const r = await imagesToPdf(blobs);
   if (!r.blob) return { error: kind === 'hwp' ? 'hwpNoImage' : 'image', kind, skipped: r.skipped };
-  return { file: new File([r.blob], base + '.pdf', { type: 'application/pdf' }), kind, pages: r.pages, skipped: r.skipped, srcName: name };
+  return { file: new File([r.blob], base + '.pdf', { type: 'application/pdf' }), kind, pages: r.pages, skipped: r.skipped, srcName: name, space: r.space, srcW: r.srcW };
 }
