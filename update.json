@@ -1,6 +1,6 @@
 {
- "version": "9e85f8b6d830",
- "built": "2026-11-25 20:21",
+ "version": "ab8aa8dda9d7",
+ "built": "2026-11-25 21:05",
  "files": {
   "assets/apple-touch-icon.png": {
    "sha256": "e9aca0c2fe30a5f6300661decbd1d578c00c7c0cead84b40374e696224d6712f",
@@ -27,20 +27,20 @@
    "size": 1379
   },
   "css/style.css": {
-   "sha256": "9deb9c0cc15897c18220f4d100eba20c2ffab20701e7d95efe6c43d948e69b0f",
-   "size": 30397
+   "sha256": "498c6b8d7b6e57d606a721b5dda6c098ccb0eb4d6199297e678fdb577af84580",
+   "size": 31191
   },
   "fonts/Griun_Yeeun-Rg.ttf": {
    "sha256": "866cfc5bfb52eacf4e39059524d719775895856eb94f170bcc4f4c89b2ae1aaa",
    "size": 1503416
   },
   "index.html": {
-   "sha256": "0f322d561337610a30fe7f272e23822a501dc4417ceb27bdf80e4dd15b11c9ad",
-   "size": 5067
+   "sha256": "7b32c1fa822565d4e21d834eccf3a6ddb1f0d1889c00ce430d7ff938fc638e73",
+   "size": 5267
   },
   "js/app.js": {
-   "sha256": "cbed334654ec2a9905b703f0f91419c6998d9c631094ebff9c0558c8088b06b4",
-   "size": 287864
+   "sha256": "02a8ca6dbe4576a79722f97c7ce83a78aa0c2df21a39c734948f423cfbda0772",
+   "size": 288687
   },
   "js/audio.js": {
    "sha256": "1197d4458b423279714557c5e262103ef2e32ffd81672718c5a8a4d6a4eb69dc",
@@ -59,12 +59,12 @@
    "size": 16393
   },
   "js/i18n.js": {
-   "sha256": "ac1857ca6c457ad3a994475ce48008246abab0466c0ecceabc03e2c49bb51271",
-   "size": 81482
+   "sha256": "1d7c30fb64b22fc8dbd5ade43cd3c930c54f5ffc6e28cb1d469fa0346055c5c9",
+   "size": 81795
   },
   "js/io.js": {
-   "sha256": "7914f49f49f6dac7353cc5d8d6af536ef81faada2be9af6ce47c518b5732ec00",
-   "size": 100876
+   "sha256": "a5124f3ab4af3ab4d63f04f11cd986190ab4dcd81544130e53c8b4d14712de8e",
+   "size": 101934
   },
   "js/model.js": {
    "sha256": "08e5923cf19bef677394cc77fdf04117397aa22ba4ff23c996ac90871af627b4",
@@ -95,7 +95,7 @@
   "versionCode": 3,
   "versionName": "1.2",
   "path": "BFlatStudio.apk",
-  "sha256": "3d6bf9f865833d18c9611680296d4e9a0cbbd32a37f34524c28388091a798aba",
+  "sha256": "af8b0318fa28138800a627da7d737edf44c4bfa68c088c92d6736ef5ac145b70",
   "size": 1910941
  }
 }
