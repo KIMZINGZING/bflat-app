@@ -222,6 +222,9 @@ body.writing #pages .page { cursor: crosshair; }
 .swing-chip { margin-left: auto; display: inline-flex; align-items: center; gap: 4px; border: 1px solid var(--line2); border-radius: 99px; padding: 1px 12px 1px 8px; cursor: pointer; font-size: 13px; background: var(--card); }
 .swing-chip:has(input:checked) { background: var(--blue-l); border-color: #93b4f5; color: var(--blue-d); }
 .swing-chip svg { color: currentColor; }
+/* 악보용 스윙 그림은 검정(#111) — 창 안에서는 글자색(어두운 테마 = 흰색)으로 */
+.swing-chip svg [fill="#111"] { fill: currentColor; }
+.swing-chip svg [stroke="#111"] { stroke: currentColor; }
 /* 내 악보함 */
 .lib-modal { width: 620px; }
 .lib-usage { display: flex; align-items: center; gap: 10px; margin: -4px 0 12px; font-size: 13px; color: var(--muted); }
