@@ -231,8 +231,8 @@ const Auth = {
     if (!this._vis) { this._vis = true; document.addEventListener('visibilitychange', () => { if (!document.hidden && this.root && this.root.querySelector('[data-resend]')) check(true); }); }
   },
   /** 인증 확인에 쓸 출입증 (가입 직후 받은 것 → 없으면 기억한 열쇠로 새로) */
-  async idToken() {
-    if (this.pending && this.pending.idToken && Date.now() - (this.pending.at || 0) < 50 * 60000) return { idToken: this.pending.idToken };   // 출입증은 1시간짜리
+  async idToken(fresh) {
+    if (!fresh && this.pending && this.pending.idToken && Date.now() - (this.pending.at || 0) < 50 * 60000) return { idToken: this.pending.idToken };   // 출입증은 1시간짜리
     const a = this.get(); if (!a) return { error: 'USER_NOT_FOUND' };
     const r = await this.refresh(a.refreshToken);
     if (r.error) return r;
