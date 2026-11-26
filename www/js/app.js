@@ -83,13 +83,14 @@ function render() {
   // 한 줄에 다 안 들어가면(마디 여백을 줄여도 음표·가사·계이름이 겹치면) 그 줄을 나눠요
   //  (조옮김으로 ♭·♯ 계이름이 넓어졌을 때, 계이름을 켰을 때, 음표를 많이 넣었을 때)
   if (!App.blank && App.lay.systems.some(sy => sy.overflow && sy.idxs.length > 1) && refitLines(s)) App.lay = computeLayout(s, App.ctxs, {});
-  const st = { sel: App.sel, selMeasures: App.selMeasures, mode: App.mode, write: App.write, verse: App.verse, playStart: App.playStart, selSlur: App.selSlur, selBar: App.selBar, widthEdit: App.widthEdit, chordEdit: App.chordEdit, hoverMeasure: App.hoverMeasure, scoreFont: App.settings.scoreFont, staff: curStaff(), head: App.head, hc: App.hc };
+  const st = { sel: App.sel, selMeasures: App.selMeasures, mode: App.mode, write: App.write, verse: App.verse, playStart: App.playStart, selSlur: App.selSlur, slurHandleR: isTouchUI() ? Math.max(6, 8 / App.zoom) : 4, selBar: App.selBar, widthEdit: App.widthEdit, chordEdit: App.chordEdit, hoverMeasure: App.hoverMeasure, scoreFont: App.settings.scoreFont, staff: curStaff(), head: App.head, hc: App.hc };
   const pages = App.blank ? [] : renderScore(s, App.ctxs, App.lay, st);
   const z = App.zoom;
   $('#pages').innerHTML = pages.map(p => `<div class="page" data-page="${p.index}" style="width:${L.PW * z}px;height:${p.h * z}px"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${L.PW} ${f1(p.h)}" width="${L.PW * z}" height="${f1(p.h * z)}">${p.parts.join('')}</svg></div>`).join('');
   document.body.dataset.mode = App.mode;
   document.body.classList.toggle('writing', App.write);
   updateStatus();
+  updateSlurBar();
 }
 function updateStatus() {
   const s = S(), c = App.ctxs;
@@ -181,7 +182,7 @@ function buildSubbar() {
     <span class="sep"></span>
     <button class="btn primary" data-act="harmDone">화음 쌓기 끝 → 음표</button>`;
   } else if (m === 'slur') {
-    h = `<div class="hint one">음표를 누른 채 다른 음표로 끌어 놓기 = 이음줄 · 줄을 클릭해 고르고 "붙임줄로 바꾸기"(T) = 붙임줄 ↔ 이음줄 · Delete = 지우기</div>
+    h = `<div class="hint one">음표를 누른 채 다른 음표로 끌어 놓기 = 이음줄 · 줄을 누른 채 끌기 = 옮기기 (끝 ○ = 한쪽만 · 다른 마디로도) · 우클릭·Delete = 지우기 · ←→ = 한 음씩 · T = 붙임줄 ↔ 이음줄</div>
     <button class="btn" id="bTieToggle" data-act="toggleTie" disabled>붙임줄로 바꾸기</button><button class="btn" id="bSlurDel" data-act="delSlur" disabled>지우기</button>`;
   } else if (m === 'bar') {
     h = `<div class="hint one">마디선 클릭 = 도돌이표·겹세로줄·끝세로줄 · 마디 클릭 = 1·2번 괄호, D.S., Coda, Fine · 끌기·Shift+클릭 = 여러 마디에 괄호를 한꺼번에</div>`;
@@ -915,11 +916,228 @@ function hit(p) {
   if (out.g) out.t = Math.max(0, Math.min(out.g.denom, xTick(out.g, p.x)));
   return out;
 }
-function hitSlur(p) {
-  let best = null, bd = 7;
-  (App.lay.slurs || []).forEach(sl => { if (sl.page !== p.page) return; sl.pts.forEach(([x, y]) => { const d = Math.hypot(x - p.x, y - p.y); if (d < bd) { bd = d; best = sl.id; } }); });
+function hitSlur(p) { const g = slurGrab(p); return g ? g.id : null; }
+
+/* ---------- 이음줄·붙임줄 고치기: 우클릭 지우기 · 끌어서 옮기기(다른 마디로도) · 터치 버튼 ---------- */
+function isTouchUI() { return document.body.classList.contains('touch'); }
+/** 누른 곳의 이음줄과 잡은 곳: 'a'(시작 끝) · 'b'(끝 끝) · 'both'(통째로) · 붙임줄은 늘 통째로
+ *  tol = 화면 픽셀 (손가락은 넉넉하게) */
+function slurGrab(p, tol) {
+  if (!p || !App.lay) return null;
+  tol = tol ? tol / App.zoom : isTouchUI() ? Math.max(7, 20 / App.zoom) : 7;   // tol = 화면 픽셀 → 악보 단위 (기본: 마우스 7 · 손가락 넉넉히)
+  const S0 = S().slurs;
+  let best = null, bd = tol;
+  (App.lay.slurs || []).forEach(sg => {
+    if (sg.page !== p.page) return;
+    sg.pts.forEach(([x, y], k) => {
+      const d = Math.hypot(x - p.x, y - p.y) - (sg.id === App.selSlur ? 2 : 0);
+      if (d < bd) { bd = d; best = { id: sg.id, k, seg: sg.seg, nseg: sg.nseg }; }
+    });
+  });
+  // 고른 이음줄의 끝 손잡이(○): 줄보다 손가락에 더 가까울 때만 (휴대폰처럼 작게 보일 때 가운데를 잡아도 끝이 잡히지 않게)
+  const sel = App.selSlur && App.lay.slurEnds && App.lay.slurEnds[App.selSlur];
+  if (sel && !sel.tie) for (const k of ['a', 'b']) {
+    const e = sel[k]; if (!e || e.page !== p.page) continue;
+    const d = Math.hypot(e.x - p.x, e.y - p.y) - 3;
+    if (d < bd) { bd = d; best = { id: App.selSlur, end: k }; }
+  }
+  if (!best) return null;
+  if (best.end) return best;
+  const sl = S0.find(x => x.id === best.id);
+  let end = 'both';
+  if (sl && sl.type !== 'tie') {
+    if (best.seg === 0 && best.k <= 1) end = 'a';
+    else if (best.seg === best.nseg - 1 && best.k >= 11) end = 'b';
+  }
+  return { id: best.id, end };
+}
+/** 이음줄이 걸린 줄의 음표 차례 (쉼표 빼고) · ia/ib = 두 끝 자리 */
+function slurSeq(sl) {
+  const fa = findNote(sl.a); if (!fa || fa.ov) return null;
+  const list = allNotes(fa.si).filter(x => !x.n.rest && x.n.p).map(x => x.n.id);
+  const ia = list.indexOf(sl.a), ib = list.indexOf(sl.b);
+  if (ia < 0 || ib < 0) return null;
+  return { si: fa.si, list, ia, ib };
+}
+/** 옮긴 뒤 붙임줄 확인: 바로 옆 음 · 같은 높이가 아니면 이음줄로 */
+function slurAfterMove(sl) {
+  if (sl.type !== 'tie') return;
+  const fa = findNote(sl.a), fb = findNote(sl.b);
+  const a = fa && allNotes(fa.si), i = a ? a.findIndex(x => x.n.id === sl.a) : -1;
+  const adj = i >= 0 && a[i + 1] && a[i + 1].n.id === sl.b;
+  const same = fa && fb && fa.n.p && fb.n.p && fa.n.p.d === fb.n.p.d && fa.n.p.a === fb.n.p.a;
+  if (!adj || !same) { sl.type = 'slur'; toast(LG('음 높이가 다르거나 바로 옆 음이 아니라서 이음줄로 바꿨어요', 'Not the same pitch on neighbouring notes, so it became a slur', '隣の同じ高さの音ではないので、スラーに変えました')); }
+}
+/** 음표 자리 ia~ib → 새 두 끝 [a, b] (못 옮기거나 그대로면 null · 같은 자리에 줄이 이미 있어도 null) */
+function slurSpan(sl, q, ia, ib) {
+  if (ia > ib) [ia, ib] = [ib, ia];
+  if (ia === ib || ia < 0 || ib >= q.list.length) return null;
+  const a = q.list[ia], b = q.list[ib];
+  if (a === sl.a && b === sl.b) return null;
+  if (S().slurs.some(x => x !== sl && x.a === a && x.b === b)) return null;
+  return [a, b];
+}
+function startSlurDrag(g, p, touch) {
+  const sl = S().slurs.find(x => x.id === g.id); if (!sl) return false;
+  const q = slurSeq(sl); if (!q) return false;
+  const near = nearestStaffNote(p, q.si);
+  const ga = App.lay.notes[sl.a];
+  App.drag = { type: 'slurMove', id: sl.id, end: g.end, p0: p, q, ia0: q.ia, ib0: q.ib, k0: near ? q.list.indexOf(near.id) : -1, ax0: ga ? ga.x : p.x, sys0: ga ? App.lay.systems.indexOf(ga.sysObj) : -1, moved: false, pushed: false, touch: !!touch };
+  return true;
+}
+/** 끄는 곳에서 가장 가까운 그 줄 음표 (끄는 곳의 악보 줄 안에서 · 다른 줄·다른 쪽으로도) */
+function nearestStaffNote(p, si) {
+  if (!p) return null;
+  const lay = App.lay;
+  const sys = lay.systems.find(s => s.page === p.page && p.y >= s.top - 30 && p.y < s.bottom + 30);
+  let best = null, bd = 1e9;
+  Object.values(lay.notes).forEach(g => {
+    if (g.page !== p.page || g.si !== si || g.rest || g.ov) return;
+    const d = sys ? (g.sysObj === sys ? Math.abs(g.x - p.x) : 1e9) : Math.hypot(g.x - p.x, g.y - p.y);
+    if (d < bd) { bd = d; best = g; }
+  });
   return best;
 }
+function moveSlurDrag(clientX, clientY) {
+  const d = App.drag; if (!d || d.type !== 'slurMove') return;
+  const el = document.elementFromPoint(clientX, clientY);
+  const pg = el && el.closest && el.closest('.page');
+  const p = pg ? pagePointAt(+pg.dataset.page, clientX, clientY) : null;
+  if (!p) return;
+  if (!d.moved && p.page === d.p0.page && Math.hypot(p.x - d.p0.x, p.y - d.p0.y) * App.zoom < 6) return;
+  d.moved = true;
+  const sl = S().slurs.find(x => x.id === d.id); if (!sl) return;
+  const t = nearestStaffNote(p, d.q.si); if (!t) return;
+  const k = d.q.list.indexOf(t.id); if (k < 0) return;
+  let ia = d.ia0, ib = d.ib0;
+  if (d.end === 'a') ia = k;
+  else if (d.end === 'b') ib = k;
+  else {
+    // 같은 줄 안: 시작 음이 손가락이 간 거리만큼 따라가요 · 다른 줄로 가면: 잡은 음 기준으로 몇 음 옮겼는지
+    let dk;
+    const sysP = App.lay.systems.findIndex(s0 => s0.page === p.page && p.y >= s0.top - 30 && p.y < s0.bottom + 30);
+    if (d.sys0 >= 0 && sysP === d.sys0) {
+      const ta = nearestStaffNote({ page: p.page, x: d.ax0 + (p.x - d.p0.x), y: p.y }, d.q.si);
+      dk = ta ? d.q.list.indexOf(ta.id) - d.ia0 : 0;
+    } else dk = k - (d.k0 >= 0 ? d.k0 : d.ia0);
+    dk = Math.max(-d.ia0, Math.min(d.q.list.length - 1 - d.ib0, dk));
+    ia += dk; ib += dk;
+  }
+  const ab = slurSpan(sl, d.q, ia, ib); if (!ab) return;
+  if (!d.pushed) { History.push(S()); d.pushed = true; }
+  [sl.a, sl.b] = ab;
+  render();
+}
+function endSlurDrag() {
+  const d = App.drag; if (!d || d.type !== 'slurMove') return;
+  App.drag = null;
+  App.selSlur = d.id;
+  if (d.moved && d.pushed) { const sl = S().slurs.find(x => x.id === d.id); if (sl) slurAfterMove(sl); changed(); }
+  else render();
+}
+/** 버튼으로 옮기기: end = 'both' | 'a' | 'b' · dir = -1(앞) / +1(뒤) */
+function slurStep(end, dir) {
+  const sl = S().slurs.find(x => x.id === App.selSlur); if (!sl) return;
+  const q = slurSeq(sl); if (!q) return;
+  let ia = q.ia, ib = q.ib;
+  if (end === 'a') ia += dir; else if (end === 'b') ib += dir; else { ia += dir; ib += dir; }
+  const ab = ia >= 0 && ib < q.list.length && ia < ib ? slurSpan(sl, q, ia, ib) : null;
+  if (!ab) { toast(LG('더 옮길 수 없어요', 'Cannot move further', 'これ以上動かせません')); return; }
+  History.push(S());
+  [sl.a, sl.b] = ab;
+  slurAfterMove(sl);
+  changed();
+  const g = App.lay.notes[end === 'b' ? sl.b : sl.a]; if (g) scrollToNote(g.id);
+}
+function deleteSelSlur() {
+  if (!App.selSlur) return;
+  commit(() => S().slurs = S().slurs.filter(x => x.id !== App.selSlur));
+  App.selSlur = null; App.slurEdit = false; render();
+}
+/** 이음줄 우클릭 메뉴 (모든 모드) */
+function slurMenu(id, x, y) {
+  const sl = S().slurs.find(s0 => s0.id === id); if (!sl) return;
+  App.selSlur = id; render();
+  const tie = sl.type === 'tie';
+  popMenu(x, y, [
+    { v: 'del', label: LG('🗑 지우기', '🗑 Delete', '🗑 削除') },
+    { v: 'toggle', label: tie ? LG('이음줄로 바꾸기', 'Change to slur', 'スラーに変える') : LG('붙임줄로 바꾸기', 'Change to tie', 'タイに変える') },
+    '-',
+    { v: 'left', label: LG('◀ 앞 음으로 옮기기', '◀ Move to previous note', '◀ 前の音へ') },
+    { v: 'right', label: LG('뒤 음으로 옮기기 ▶', 'Move to next note ▶', '次の音へ ▶') },
+  ], v => {
+    if (v === 'del') deleteSelSlur();
+    else if (v === 'toggle') toggleTieType();
+    else if (v === 'left') slurStep('both', -1);
+    else if (v === 'right') slurStep('both', 1);
+  }, tie ? LG('붙임줄 · 끌어서 옮기기', 'Tie · drag to move', 'タイ · ドラッグで移動') : LG('이음줄 · 끌어서 옮기기 (끝 ○ = 한쪽만)', 'Slur · drag to move (end ○ = one end)', 'スラー · ドラッグで移動 (端の○ = 片側)'));
+}
+/** 터치 화면: 이음줄을 누르면 아래 막대 = 지우기 / 옮기기 → 옮기기면 ◀▶ 버튼 + 손가락으로 끌기 */
+function updateSlurBar() {
+  let bar = $('#slurBar');
+  const sl = App.selSlur && S().slurs.find(x => x.id === App.selSlur);
+  if (!sl || !isTouchUI() || App.blank) { if (bar) bar.hidden = true; document.body.classList.remove('slurbar-on'); App.slurEdit = sl ? App.slurEdit : false; return; }
+  document.body.classList.add('slurbar-on');
+  if (!bar) {
+    bar = document.createElement('div'); bar.id = 'slurBar'; bar.className = 'slur-bar';
+    document.body.appendChild(bar);
+    bar.addEventListener('mousedown', e => { e.__bflat = true; e.stopPropagation(); });
+    bar.addEventListener('touchstart', e => e.stopPropagation(), { passive: true });
+    bar.addEventListener('click', e => {
+      const b = e.target.closest('[data-sb]'); if (!b) return;
+      const v = b.dataset.sb;
+      if (v === 'del') deleteSelSlur();
+      else if (v === 'move') { App.slurEdit = true; updateSlurBar(); }
+      else if (v === 'toggle') toggleTieType();
+      else if (v === 'done') { App.slurEdit = false; App.selSlur = null; render(); }
+      else { const [end, dir] = v.split(':'); slurStep(end, +dir); }
+    });
+  }
+  const tie = sl.type === 'tie';
+  const name = tie ? LG('붙임줄', 'Tie', 'タイ') : LG('이음줄', 'Slur', 'スラー');
+  const key = (App.slurEdit ? 'm' : 'c') + (tie ? 't' : 's') + I18N.lang;
+  if (bar.dataset.k !== key) {
+    bar.dataset.k = key;
+    bar.innerHTML = !App.slurEdit
+      ? `<span class="sb-title">${name}</span>
+         <button class="btn danger" data-sb="del">🗑 ${LG('지우기', 'Delete', '削除')}</button>
+         <button class="btn primary" data-sb="move">✥ ${LG('옮기기', 'Move', '移動')}</button>
+         <button class="btn" data-sb="toggle">${tie ? LG('이음줄로', 'To slur', 'スラーに') : LG('붙임줄로', 'To tie', 'タイに')}</button>
+         <button class="btn" data-sb="done">✕</button>`
+      : `<span class="sb-title">${LG(`${name} 옮기기 · 손가락이나 펜으로 끌어도 돼요`, `Move ${name.toLowerCase()} · or drag it with a finger or pen`, `${name}を移動 · 指やペンでドラッグもできます`)}</span>
+         <span class="sb-grp"><button class="btn" data-sb="both:-1">◀</button><b>${LG('통째로', 'Whole', '全体')}</b><button class="btn" data-sb="both:1">▶</button></span>
+         ${tie ? '' : `<span class="sb-grp"><button class="btn" data-sb="a:-1">◀</button><b>${LG('시작', 'Start', '始点')}</b><button class="btn" data-sb="a:1">▶</button></span>
+         <span class="sb-grp"><button class="btn" data-sb="b:-1">◀</button><b>${LG('끝', 'End', '終点')}</b><button class="btn" data-sb="b:1">▶</button></span>`}
+         <button class="btn danger" data-sb="del">🗑</button>
+         <button class="btn primary" data-sb="done">${LG('완료', 'Done', '完了')}</button>`;
+  }
+  bar.hidden = false;
+}
+/** 터치: 고른 이음줄을 손가락·펜으로 끌기 (화면이 밀리지 않게 막고 옮겨요) */
+function onSlurTouchStart(e) {
+  if (e.touches.length !== 1 || !App.selSlur || App.blank) return;
+  const t = e.touches[0];
+  const pg = t.target && t.target.closest && t.target.closest('.page'); if (!pg) return;
+  const p = pagePointAt(+pg.dataset.page, t.clientX, t.clientY);
+  const g = slurGrab(p, App.slurEdit ? 34 : 22);
+  if (!g || g.id !== App.selSlur) return;
+  e.preventDefault();
+  closePop();
+  if (!startSlurDrag(g, p, true)) return;
+  // 끄는 동안 악보를 다시 그리면 처음 누른 그림 조각이 사라져요 → 그 뒤 터치는 window까지 안 올라와서
+  //  누른 조각에 직접 귀를 달아요 (떨어진 조각에도 터치는 계속 와요)
+  const tgt = e.target;
+  const off = () => { tgt.removeEventListener('touchmove', onSlurTouchMove); tgt.removeEventListener('touchend', end); tgt.removeEventListener('touchcancel', end); };
+  const end = () => { off(); onSlurTouchEnd(); };
+  tgt.addEventListener('touchmove', onSlurTouchMove, { passive: false });
+  tgt.addEventListener('touchend', end); tgt.addEventListener('touchcancel', end);
+}
+function onSlurTouchMove(e) {
+  const d = App.drag; if (!d || d.type !== 'slurMove' || !d.touch) return;
+  e.preventDefault();
+  const t = e.touches[0]; if (t) moveSlurDrag(t.clientX, t.clientY);
+}
+function onSlurTouchEnd() { const d = App.drag; if (d && d.type === 'slurMove' && d.touch) endSlurDrag(); }
 function clientOf(page, x, y) { const pg = $(`.page[data-page="${page}"]`); const r = pg.getBoundingClientRect(); return { x: r.left + x * App.zoom, y: r.top + y * App.zoom }; }
 function scrollToNote(id) {
   const g = App.lay.notes[id]; if (!g) return;
@@ -945,6 +1163,14 @@ function onMouseDown(e) {
   const h = hit(p);
   // 줄 맨 앞 음자리표를 누르면 음자리표 바꾸기 (가온음자리표는 줄 위치 옮기기)
   if (h.sys && h.header && p.x < h.sys.x0 + 36 && h.zone === 'staff') { clefMenu(h.si || 0, e.clientX, e.clientY); return; }
+  // 이음줄·붙임줄 잡기 (이음줄 모드 · 음표 모드 쓰기 끔): 누른 채 끌면 다른 음표·다른 마디로 옮겨요
+  //  (터치 화면은 쓰기 모드에서도 이음줄을 누르면 골라요 · 음표 넣기와 헷갈리지 않게 줄 가까이만)
+  if (App.mode === 'slur' || (App.mode === 'note' && (!App.write || isTouchUI()))) {
+    const g = slurGrab(p, App.mode === 'note' && App.write ? 10 : 0);
+    // 음표 머리 위면 음표가 먼저 · 다만 고른 이음줄의 끝 손잡이(○)는 머리 옆에 있어서 손잡이가 먼저
+    if (g && (!h.note || (g.id === App.selSlur && g.end !== 'both'))) { App.selSlur = g.id; App.sel = []; startSlurDrag(g, p, false); render(); return; }
+  }
+  if (App.selSlur) { App.selSlur = null; App.slurEdit = false; updateSlurBar(); }
   if (h.note) setPlayStart(h.note.mi, h.note.t);
   const m = App.mode;
   if (m === 'note') return downNote(e, p, h);
@@ -1078,6 +1304,8 @@ function onMouseMove(e) {
   } else if (d.type === 'rubber') {
     if (Math.hypot(p.x - d.p0.x, p.y - d.p0.y) > 5) d.moved = true;
     if (d.moved) showRubber(d.p0, p);
+  } else if (d.type === 'slurMove') {
+    if (!d.touch) moveSlurDrag(e.clientX, e.clientY);
   } else if (d.type === 'slur') {
     showSlurLine(d.from, p);
   } else if (d.type === 'msel' || d.type === 'mmove') {
@@ -1100,6 +1328,7 @@ function onMouseUp(e) {
   hideOverlays();
   if (hitEl && hitEl.closest && hitEl.closest('.page')) e = { clientX: e.clientX, clientY: e.clientY, target: hitEl.closest('.page'), button: e.button, ctrlKey: e.ctrlKey, shiftKey: e.shiftKey };
   if (!d) return;
+  if (d.type === 'slurMove') { App.drag = d; if (!d.touch) endSlurDrag(); return; }
   if (d.type === 'pitch') { if (d.moved) changed(); return; }
   if (d.type === 'nmove') {
     if (!d.moved) return;
@@ -1165,6 +1394,8 @@ function onDblClick(e) {
 function onContext(e) {
   const p = pagePoint(e); if (!p) return;
   e.preventDefault();
+  // 이음줄·붙임줄 위 우클릭 = 지우기 메뉴 (어느 모드에서나)
+  const sg = slurGrab(p); if (sg) { slurMenu(sg.id, e.clientX, e.clientY); return; }
   const h = hit(p);
   if (!h.g) return;
   contextMenu(h.mi, e.clientX, e.clientY);
@@ -1469,8 +1700,8 @@ function openLyricEditor(mi) {
   box.style.left = (g.x + 2) * z + 'px';
   box.style.top = (g.staffTop + 4 * L.SP + 10 + rowIdx * 21) * z + 'px';
   box.style.width = Math.max(180, (g.w - 4) * z) + 'px';
-  const notes = m.notes.filter(n => !n.rest && n.p && !App.lay.tied.into.has(n.id)).length;
-  box.innerHTML = `<div class="ed-label">${mi + 1}마디 · ${v + 1}절 · 음표 ${notes}개 <span class="cnt"></span></div><input value="${esc(m.lyrics[v] || '')}" placeholder="가사 (예: 참 반 가 운)" spellcheck="false">`;
+  const notes = m.notes.filter(n => lyrSlot(n, App.lay.tied.into)).length;   // 쉼표도 한 자리
+  box.innerHTML = `<div class="ed-label">${mi + 1}마디 · ${v + 1}절 · 음표·쉼표 ${notes}개 <span class="cnt"></span></div><input value="${esc(m.lyrics[v] || '')}" placeholder="가사 (예: 참 반 가 운)" spellcheck="false">`;
   pg.appendChild(box);
   const inp = box.querySelector('input'), cnt = box.querySelector('.cnt');
   const upd = () => { const k = parseLyrics(inp.value).length; cnt.textContent = `· 음절 ${k}개`; cnt.style.color = k > notes ? '#dc2626' : ''; };
@@ -3480,15 +3711,17 @@ function onKey(e) {
   if (k === 'Tab') { e.preventDefault(); const i = MODES.findIndex(m => m[0] === App.mode); return setMode(MODES[mod(i + (e.shiftKey ? -1 : 1), MODES.length)][0]); }
   if (k === 'Escape') {
     if (App.mode === 'harm') { e.preventDefault(); return leaveHarm(); }
-    closePop(); closeEditors(); if (App.widthEdit) { App.widthEdit = false; App.selBar = null; } App.sel = []; App.selSlur = null; App.selMeasures = []; render(); return;
+    closePop(); closeEditors(); if (App.widthEdit) { App.widthEdit = false; App.selBar = null; } App.sel = []; App.selSlur = null; App.slurEdit = false; App.selMeasures = []; render(); return;
+  }
+  // 고른 이음줄·붙임줄 (이음줄 모드 · 음표 모드): Delete = 지우기 · ←→ = 앞·뒤 음으로 옮기기 · T = 붙임줄↔이음줄
+  if (App.selSlur && (App.mode === 'slur' || App.mode === 'note')) {
+    if (k === 'Delete' || k === 'Backspace') { e.preventDefault(); return deleteSelSlur(); }
+    if ((k === 'ArrowLeft' || k === 'ArrowRight') && !e.ctrlKey && !e.altKey) { e.preventDefault(); return slurStep('both', k === 'ArrowLeft' ? -1 : 1); }
+    if (k === 't' || k === 'T') { e.preventDefault(); return toggleTieType(); }
   }
   if (App.mode === 'note') return keyNote(e);
   if (App.mode === 'harm') return keyHarm(e);
-  if (App.mode === 'slur') {
-    if ((k === 't' || k === 'T') && App.selSlur) { e.preventDefault(); toggleTieType(); }
-    if ((k === 'Delete' || k === 'Backspace') && App.selSlur) { e.preventDefault(); commit(() => S().slurs = S().slurs.filter(x => x.id !== App.selSlur)); App.selSlur = null; render(); }
-    return;
-  }
+  if (App.mode === 'slur') return;
   if (App.mode === 'measure') {
     if (App.widthEdit && App.selBar !== null && (k === 'ArrowLeft' || k === 'ArrowRight')) { e.preventDefault(); return nudgeBar((k === 'ArrowLeft' ? -1 : 1) * (e.shiftKey ? 12 : 2)); }
     if ((k === 'Delete' || k === 'Backspace') && App.selMeasures.length) { e.preventDefault(); commit(() => deleteMeasures(App.selMeasures)); App.selMeasures = []; render(); }
@@ -3667,6 +3900,8 @@ function init() {
   window.addEventListener('mouseup', onMouseUp);
   pages.addEventListener('dblclick', onDblClick);
   pages.addEventListener('contextmenu', onContext);
+  // 터치(손가락·S펜): 고른 이음줄을 끌어서 옮기기
+  pages.addEventListener('touchstart', onSlurTouchStart, { passive: false });
   document.addEventListener('keydown', onKey);
   // 인터넷 주소로 연 웹앱(아이폰 Safari 등): 인터넷이 없어도 열리게 (PC 프로그램·안드로이드 앱 안에서는 안 써요)
   if ('serviceWorker' in navigator && location.protocol === 'https:' && !window.AndroidBridge && !/^(localhost|127\.|bflat\.app$)/.test(location.hostname)) {
