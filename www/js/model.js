@@ -50,6 +50,10 @@ function midiToPitch(midi, fifths, prefer) {
   return { d: oct * 7 + best.s, a: best.a };
 }
 
+/** 음표 위아래에 그리는 꾸밈 표시만 (박자치기 'x' 는 머리 모양이라 빼요) */
+function artMarks(n) { return (n.art || []).filter(a => a !== 'x'); }
+/** 박자치기 (X 머리) */
+function isClap(n) { return !!n && (n.art || []).includes('x'); }
 function noteTicks(n, cap) {
   if (n.full) return cap;
   let t = DUR_T[n.dur];
