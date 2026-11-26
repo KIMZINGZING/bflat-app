@@ -131,6 +131,17 @@ body.writing #pages .page { cursor: crosshair; }
 .ed-row { display: flex; gap: 3px; align-items: center; }
 .ed-nav { border: 1px solid var(--line); background: var(--sub); border-radius: 5px; cursor: pointer; padding: 3px 5px; font-size: 11px; }
 .lyric-ed { min-width: 180px; }
+.lyric-ed .ed-row input { flex: 1; min-width: 0; }
+.ed-ok { border: 1px solid var(--blue); background: var(--blue); color: #fff; border-radius: 5px; cursor: pointer; padding: 4px 9px; font-size: 12.5px; font-weight: 700; white-space: nowrap; }
+.ed-keys { display: flex; gap: 3px; margin-top: 4px; }
+.ed-key { flex: 1; min-width: 22px; border: 1px solid var(--line); background: var(--sub); color: var(--ink); border-radius: 4px; cursor: pointer; padding: 2px 4px; font-size: 11.5px; font-weight: 700; line-height: 1.3; }
+.ed-key:hover, .ed-nav:hover { border-color: var(--blue); color: var(--blue); }
+/* 음표 모드: 마디 오른쪽 위 작은 개수 버튼 */
+.count-btn { position: absolute; z-index: 15; height: 17px; min-width: 24px; padding: 0 4px; border: 1px solid var(--blue); border-radius: 9px; background: var(--card); color: var(--blue); font-size: 10.5px; font-weight: 700; line-height: 15px; cursor: pointer; opacity: .85; box-shadow: 0 1px 3px rgba(30,64,175,.18); }
+.count-btn:hover { opacity: 1; background: var(--blue); color: #fff; }
+body.touch .count-btn { height: 24px; min-width: 32px; line-height: 22px; font-size: 12px; border-radius: 12px; margin-top: -6px; margin-left: -6px; }
+body.touch .ed-key { min-width: 30px; padding: 5px 4px; font-size: 13px; }
+body.touch .ed-ok { padding: 7px 12px; font-size: 14px; }
 
 /* 팝업 메뉴 */
 .pop { position: fixed; z-index: 50; background: var(--card); border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 10px 30px rgba(15,23,42,.18); padding: 6px; min-width: 200px; max-height: 80vh; overflow: auto; }
@@ -320,7 +331,7 @@ body.blank .modal-btns .grow { flex: 1; }
 @media print {
   @page { size: A4; margin: 8mm; }
   body { display: block; overflow: visible; background: var(--card); height: auto; }
-  #topbar, #subbar, #status, #toast, #popRoot, #modalRoot, .editor, .play-cursor, .ovl, #pdfPanel { display: none !important; }
+  #topbar, #subbar, #status, #toast, #popRoot, #modalRoot, .editor, .count-btn, .play-cursor, .ovl, #pdfPanel { display: none !important; }
   #workArea { display: block; }
   /* PDF + 계이름 인쇄 */
   body.print-pdfsol #scroller { display: none !important; }
