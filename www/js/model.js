@@ -199,7 +199,7 @@ function newScore(o) {
     type: SCORE_TYPES[o.type] ? o.type : 'single', staves,
     app: 'BFlat Studio', version: 1, title: o.title, composer: o.composer, lyricist: o.lyricist,
     time: { num: +o.num, den: +o.den }, key: +o.key, clef: o.clef, tempo: +o.tempo || null, tempoText: o.tempoText || '', swing: !!o.swing, lyricLines: +o.lyricLines,
-    lines: [], measures: [], slurs: [], lyrRest: true
+    lines: [], measures: [], slurs: [], lyrRest: true, lyrSlur: true
   };
   for (let i = 0; i < o.lines; i++) { s.lines.push(+o.mpl); for (let j = 0; j < o.mpl; j++) s.measures.push(newMeasure()); }
   return s;
@@ -220,6 +220,7 @@ function fixIds(s) {
   s.slurs = (s.slurs || []).filter(x => x.a && x.b);
   s.slurs.forEach(x => { if (!x.id) x.id = uid(); });
   migrateLyricRests(s);
+  migrateLyricSlurs(s, !!s._fromXml); delete s._fromXml;
   // 줄 정보 보정
   let total = s.lines.reduce((a, b) => a + b, 0);
   if (total !== s.measures.length) {
@@ -333,6 +334,53 @@ function lyrTokensText(toks) {
   while (toks.length && toks[toks.length - 1] === '') toks = toks.slice(0, -1);
   const t = toks.map(x => x === '' || x === '_' || x === '-' ? x : (x.length > 1 && (HANGUL.test(x) || /[\s\-_\[\]]/.test(x))) ? `[${x}]` : x).join(' ');
   return toks[0] === '' ? ' ' + t : t;
+}
+/** 이음줄 안의 음(첫 음 빼고) → Map(음 id → 이음줄) · 첫 줄(가사 줄)만 */
+function slurInner(s) {
+  const out = new Map();
+  const slurs = (s.slurs || []).filter(x => x.type !== 'tie' && !x.syl);
+  if (!slurs.length) return out;
+  const seq = [], pos = new Map();
+  s.measures.forEach(m => (SNr(m, 0) || []).forEach(n => { pos.set(n.id, seq.length); seq.push(n); }));
+  slurs.forEach(x => {
+    const a = pos.get(x.a), b = pos.get(x.b);
+    if (a === undefined || b === undefined || b <= a) return;
+    for (let k = a + 1; k <= b; k++) if (!seq[k].rest && !out.has(seq[k].id)) out.set(seq[k].id, x);
+  });
+  return out;
+}
+/** 가사를 받지 않는 음: 붙임줄로 이어 받은 음 + 이음줄 안의 음(첫 음 빼고)
+ *  — 노래에서 이음줄 = 한 글자를 여러 음으로 늘여 불러요 (멜리스마) · syl 표시한 이음줄은 음마다 한 글자 */
+function noSylSet(s, into) {
+  const out = new Set(into);
+  slurInner(s).forEach((x, id) => out.add(id));
+  return out;
+}
+/** 예전 악보·가져온 악보 → 이음줄 안의 음에 있던 빈 자리('_'·빈 음절)를 빼서 가사가 같은 음에 그대로 붙게
+ *  markSyl: 가져온 악보처럼 음마다 가사가 정확할 때 — 이음줄 안 음에 글자가 있으면 그 이음줄은 음마다 한 글자(syl) */
+function migrateLyricSlurs(s, markSyl) {
+  if (s.lyrSlur) return;
+  s.lyrSlur = true;
+  const into = new Set((s.slurs || []).filter(x => x.type === 'tie').map(x => x.b));
+  const real = t => t && t !== '_' && t !== '-';
+  if (!(s.slurs || []).some(x => x.type !== 'tie')) return;
+  const slotsOf = m => (SNr(m, 0) || []).filter(n => lyrSlot(n, into));
+  if (markSyl) {
+    const inner = slurInner(s);
+    s.measures.forEach(m => {
+      const slots = slotsOf(m);
+      Object.keys(m.lyrics || {}).forEach(v => parseLyrics(m.lyrics[v]).forEach((t, k) => { const sl = slots[k] && inner.get(slots[k].id); if (sl && real(t)) sl.syl = true; }));
+    });
+  }
+  const inner = slurInner(s);
+  s.measures.forEach(m => {
+    const slots = slotsOf(m);
+    Object.keys(m.lyrics || {}).forEach(v => {
+      const toks = parseLyrics(m.lyrics[v]);
+      const keep = toks.filter((t, k) => !(slots[k] && inner.has(slots[k].id) && !real(t)));
+      if (keep.length !== toks.length) m.lyrics[v] = lyrTokensText(keep);
+    });
+  });
 }
 /** 예전 악보(쉼표를 가사 자리로 세지 않던 때) → 쉼표 자리에 빈 음절을 넣어 가사가 그대로 같은 음에 붙게 */
 function migrateLyricRests(s) {
