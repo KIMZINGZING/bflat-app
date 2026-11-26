@@ -319,7 +319,7 @@ function measureSegs(s, c, m, nSt, tied, verses) {
   const lyrTargets = evs.filter(e => e.si === 0 && !e.ov && !e.n.rest && e.n.p && !tied.into.has(e.n.id));
   verses.forEach(v => {
     const row = [];
-    parseLyrics(m.lyrics[v]).forEach((sy, k) => { const e = lyrTargets[k]; if (!e || sy === '_') return; const w = textW(sy, 14); row.push({ t: e.t, l: w / 2, r: w / 2 }); });
+    parseLyrics(m.lyrics[v]).forEach((sy, k) => { const e = lyrTargets[k]; if (!e || !sy || sy === '_') return; const w = textW(sy, 14); row.push({ t: e.t, l: w / 2, r: w / 2 }); });
     rowCons(row, 7);
   });
   // 계이름 (켠 줄마다 · 화음이면 가장 넓은 글자)
@@ -884,6 +884,7 @@ function drawMeasure(s, ctxs, lay, sys, i, k, out, o) {
         if (lastX !== null) out.push(`<line x1="${f1(lastX + lastW / 2 + 2)}" y1="${f1(yy + 2)}" x2="${f1(x + 6)}" y2="${f1(yy + 2)}" stroke="#333" stroke-width="1"/>`);
         lastX = x; lastW = 0; return;
       }
+      if (!sy) { lastX = x; lastW = 0; return; }   // 띄어쓰기로 비운 음
       const w = sy.length * (HANGUL.test(sy) ? 13 : 7.5);
       const prefix = (kk === 0 && (s.lyricLines > 1) && (i === 0 || !(s.measures[i - 1].lyrics[v] || '').trim())) ? `${v + 1}. ` : '';
       out.push(`<text x="${f1(x)}" y="${f1(yy)}" text-anchor="middle" font-family="${font}" font-size="14" fill="${red ? '#dc2626' : '#111'}" data-syl="${i}:${v}:${kk}">${esc(sy)}</text>`);
