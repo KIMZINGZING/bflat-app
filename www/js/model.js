@@ -299,6 +299,10 @@ function restsFor(start, rem) {
 
 /* ===== 가사 ===== */
 const HANGUL = /[가-힣ㄱ-ㆎ]/;
+/** 가사 글 → 음표마다 한 음절
+ *  - 한글 한 글자 = 한 음 · [두근] = 한 음에 묶음 · _ = 한 음 건너뛰기(늘임줄)
+ *  - 띄어쓰기: 한 칸은 나누기만, 두 칸부터는 더 띄운 칸 하나마다 가사 없는 음 1개 ('' 음절) · 끝에 남은 띄어쓰기는 셈하지 않아요
+ *  - '-': 낱말 안에 붙은 것(hel-lo)은 나누기만, 그 밖(한글 뒤·띄운 자리·맨 앞)은 '-' 자체가 한 음절 */
 function parseLyrics(text) {
   const out = [];
   if (!text) return out;
@@ -307,8 +311,13 @@ function parseLyrics(text) {
   while (i < text.length) {
     const c = text[i];
     if (c === '[') { flush(); const j = text.indexOf(']', i); const g = text.slice(i + 1, j < 0 ? text.length : j); if (g) out.push(g); i = j < 0 ? text.length : j + 1; continue; }
-    if (/\s/.test(c)) { flush(); i++; continue; }
-    if (c === '-') { flush(); i++; continue; }
+    if (/\s/.test(c)) {
+      flush();
+      let j = i; while (j < text.length && /\s/.test(text[j])) j++;
+      if (j < text.length) for (let k = 1; k < j - i; k++) out.push('');
+      i = j; continue;
+    }
+    if (c === '-') { if (buf) flush(); else out.push('-'); i++; continue; }
     if (c === '_') { flush(); out.push('_'); i++; continue; }
     if (HANGUL.test(c)) { flush(); out.push(c); i++; continue; }
     buf += c; i++;
