@@ -261,7 +261,9 @@ function measureSegs(s, c, m, nSt, tied, verses) {
       const ps = notePitches(n).map(p => p.d).sort((a, b) => a - b);
       const second = ps.some((d0, q) => q && d0 - ps[q - 1] === 1);
       // 2도 화음: 기둥이 아래면 비킨 머리가 왼쪽으로 가요 → 앞 구간에서 자리 확보 (임시표처럼)
-      evs.push({ t, d, min: 14 + ((n.ps && n.ps.length) ? 4 : 0) + (n.dots ? 6 : 0) + (second ? 10 : 0), accW: (nAcc ? 8 + nAcc * 7 : 0) + (second ? 11 : 0), ph: n.ph, si, n }); t += d;
+      // 꾸밈음도 앞쪽에 자리를 차지해요 (작은 음 하나에 9 · 임시표가 붙으면 7 더)
+      const grW = (n.gr && n.gr.length && !n.rest) ? 6 + n.gr.length * 9 + n.gr.filter(p => p.a !== keyAlter(c.key, mod(p.d, 7))).length * 7 : 0;
+      evs.push({ t, d, min: 14 + ((n.ps && n.ps.length) ? 4 : 0) + (n.dots ? 6 : 0) + (second ? 10 : 0), accW: (nAcc ? 8 + nAcc * 7 : 0) + (second ? 11 : 0) + grW, ph: n.ph, si, n }); t += d;
     });
     startsSt.push(st);
     // 둘째 성부 (길이가 다른 화음 음)
@@ -361,8 +363,8 @@ function stemLowPos(s, idxs, si, clef) {
       const ps = notePitches(n).map(p => posOf(p, clef)), lo = Math.min(...ps), hi = Math.max(...ps);
       const down = isOv || (!twoV && (lo + hi) / 2 >= 4);
       // 기둥이 위로 가면 스타카토 같은 꾸밈은 머리 아래에 붙어요 → 그 밑까지 자리 확보
-      const arts = (n.art || []).filter(a => a !== 'fermata').length;
-      const artPos = !down && arts ? lo - 1 - (11 + (arts - 1) * 8 + 4) / (L.SP / 2) : 0;
+      const arts = artMarks(n).filter(a => a !== 'fermata').length;
+      const artPos =!down && arts ? lo - 1 - (11 + (arts - 1) * 8 + 4) / (L.SP / 2) : 0;
       lowPos = Math.min(lowPos, down ? lo - 7 - (n.dur === 's' ? 2 : 0) : lo - 1, artPos);
     };
     SNr(m, si).forEach(n => look(n, false));
@@ -402,9 +404,11 @@ function staffTopPos(m, si, clef, c) {
     let up = twoV ? true : (it.grp ? it.grpUp : it.mid < 4);
     if (n.ph || n.dur === 'w') up = false;
     let y = up ? it.hi + 7 + (it.grp ? Math.max(...it.grp.map(x => x.hi)) - it.hi + 2 : 0) : it.hi + 1.5;
-    const arts = (n.art || []).filter(a => a !== 'fermata').length;
+    const arts = artMarks(n).filter(a => a !== 'fermata').length;
     if (!up && arts) y = Math.max(y, it.hi + (11 + (arts - 1) * 8 + 6) / (L.SP / 2));
     if ((n.art || []).includes('fermata')) y = Math.max(y, Math.max(it.hi, 8) + 5);
+    // 꾸밈음: 작은 기둥이 위로
+    if (n.gr && n.gr.length) y = Math.max(y, Math.max(...n.gr.map(p => posOf(p, clef))) + 5.5);
     top = Math.max(top, y);
   });
   OVr(m, si).forEach(n => { if (!n.rest && n.p) top = Math.max(top, Math.max(...notePitches(n).map(p => posOf(p, clef))) + 1.5); });
@@ -940,7 +944,8 @@ function drawStaffNotes(s, c, g, sys, i, si, out, o, lay) {
   });
   // 리듬이 다른 화음 성부가 있으면: 멜로디 기둥은 위로, 화음 성부 기둥은 아래로 (실제 악보처럼)
   const sep = notesGeo.filter(o => o.ov && !o.rest && !o.merged);
-  if (sep.length) {
+  // 화음 성부 쉼표만 있어도 두 성부로 (쉼표는 아래, 멜로디 기둥은 위)
+  if (sep.length || notesGeo.some(o => o.ov && o.rest)) {
     notesGeo.forEach(q => { if (!q.rest) q.forceUp = !q.ov; });
     // 같은 박에서 머리가 붙으면(2도·같은 음) 화음 성부를 옆으로
     sep.forEach(o => {
@@ -995,6 +1000,12 @@ function drawStaffNotes(s, c, g, sys, i, si, out, o, lay) {
         const hi = Math.max(-99, ...notesGeo.filter(q => q.ov && !q.rest && q.heads && q.t < gg.t + d && q.t + noteTicks(q.n, c.cap) > gg.t).map(q => q.maxPos));
         const low = { w: 6, h: 4, q: 1, e: 2, s: 0 }[n.full ? 'w' : n.dur];
         if (hi > -99 && hi + 2 > low) dy = Math.ceil((hi + 2 - low) / 2) * SP;
+      } else if (gg.ov) {
+        // 화음 성부 쉼표: 같은 때 울리는 멜로디 음 아래로 내려요
+        const d = noteTicks(n, c.cap);
+        const lo = Math.min(99, ...notesGeo.filter(q => !q.ov && !q.rest && q.heads && q.t < gg.t + d && q.t + noteTicks(q.n, c.cap) > gg.t).map(q => q.minPos));
+        const high = { w: 7, h: 5, q: 7, e: 6, s: 6 }[n.full ? 'w' : n.dur];
+        if (lo < 99 && high + 2 > lo) dy = -Math.ceil((high + 2 - lo) / 2) * SP;
       }
       gg.restDy = dy;
       o2 += svgRest(n.full ? 'w' : n.dur, gg.x, top - dy, col);
@@ -1018,9 +1029,15 @@ function drawStaffNotes(s, c, g, sys, i, si, out, o, lay) {
       o2 += ledger(x - 9 - (anyL ? 10.6 : 0), x + 9 + (anyR ? 10.6 : 0), gg.minPos);
       if (gg.maxPos >= 10) o2 += ledger(x - 9 - (anyL ? 10.6 : 0), x + 9 + (anyR ? 10.6 : 0), gg.maxPos);
       // 머리
+      const clap = isClap(n);
       hs.forEach(h => {
         const hx = x + h.shift * 10.6, y = h.y, hc = headCol(h.k, h);
-        if (n.ph) o2 += `<ellipse cx="${f1(hx)}" cy="${f1(y)}" rx="5.6" ry="3.9" transform="rotate(-22 ${f1(hx)} ${f1(y)})" fill="${hc}"/>`;
+        // 박자치기: X 머리 (2분·온음표는 X 둘레에 동그라미)
+        if (clap && !n.ph) {
+          o2 += `<path d="M${f1(hx - 4.6)} ${f1(y - 4)} L${f1(hx + 4.6)} ${f1(y + 4)} M${f1(hx - 4.6)} ${f1(y + 4)} L${f1(hx + 4.6)} ${f1(y - 4)}" stroke="${hc}" stroke-width="1.8" stroke-linecap="round"/>`;
+          if (n.dur === 'w' || n.dur === 'h') o2 += `<circle cx="${f1(hx)}" cy="${f1(y)}" r="6.6" fill="none" stroke="${hc}" stroke-width="1.2"/>`;
+        }
+        else if (n.ph) o2 +=`<ellipse cx="${f1(hx)}" cy="${f1(y)}" rx="5.6" ry="3.9" transform="rotate(-22 ${f1(hx)} ${f1(y)})" fill="${hc}"/>`;
         else if (n.dur === 'w') o2 += `<ellipse cx="${f1(hx)}" cy="${f1(y)}" rx="6.4" ry="4.3" fill="none" stroke="${hc}" stroke-width="2.2"/>`;
         // 2분음표(점2분 포함) 머리는 속이 빈 테두리만 — 오선·덧줄이 머리 안을 지나가는 게 보이게 (흰색으로 메우면 줄이 끊겨 보여요)
         else if (n.dur === 'h') o2 += `<ellipse cx="${f1(hx)}" cy="${f1(y)}" rx="5.5" ry="3.7" transform="rotate(-22 ${f1(hx)} ${f1(y)})" fill="none" stroke="${hc}" stroke-width="1.7"/>`;
@@ -1036,6 +1053,44 @@ function drawStaffNotes(s, c, g, sys, i, si, out, o, lay) {
         cols[cIdx] = h.pos;
         o2 += svgAcc(h.acc, x - 14 - (anyL ? 10.6 : 0) - cIdx * 9, h.y, headCol(h.k, h));
       });
+      // 꾸밈음 (앞꾸밈음): 원래 음표(임시표 포함) 왼쪽에 작은 8분음표 · 하나면 빗금 · 여럿이면 16분 빔
+      if (n.gr && n.gr.length) {
+        const gs = n.gr.map((p, g) => ({ p, k: -2 - g, pos: posOf(p, clef) }));
+        let gx = x - 13 - (anyL ? 10.6 : 0) - (accs.length ? cols.length * 9 + 3 : 0);
+        // 뒤 꾸밈음부터 왼쪽으로 놓아요
+        const xs = [];
+        for (let g = gs.length - 1; g >= 0; g--) {
+          const gh = gs[g];
+          const expect = keyAlter(c.key, mod(gh.p.d, 7));
+          gh.acc = gh.p.a !== expect ? gh.p.a : undefined;
+          xs[g] = gx; gx -= 9 + (gh.acc !== undefined ? 7 : 0);
+        }
+        const stemTop = Math.min(...gs.map(gh => yOf(top, gh.pos))) - 17;
+        gg.graceHeads = [];
+        gs.forEach((gh, g) => {
+          const hx = xs[g], y = yOf(top, gh.pos), hc = (st.head && st.head.id === n.id && st.head.k === gh.k) ? '#2563eb' : col;
+          gg.graceHeads.push({ x: hx, y, k: gh.k });
+          // 덧줄 (짧게)
+          for (let p = -2; p >= gh.pos; p -= 2) o2 += `<line x1="${f1(hx - 6)}" y1="${f1(yOf(top, p))}" x2="${f1(hx + 6)}" y2="${f1(yOf(top, p))}" stroke="#222" stroke-width="1"/>`;
+          for (let p = 10; p <= gh.pos; p += 2) o2 += `<line x1="${f1(hx - 6)}" y1="${f1(yOf(top, p))}" x2="${f1(hx + 6)}" y2="${f1(yOf(top, p))}" stroke="#222" stroke-width="1"/>`;
+          o2 += `<ellipse cx="${f1(hx)}" cy="${f1(y)}" rx="3.9" ry="2.8" transform="rotate(-22 ${f1(hx)} ${f1(y)})" fill="${hc}"/>`;
+          if (gh.acc !== undefined) o2 += `<g transform="translate(${f1(hx - 8)} ${f1(y)}) scale(.68) translate(${f1(-(hx - 8))} ${f1(-y)})">${svgAcc(gh.acc, hx - 8, y, hc)}</g>`;
+          const sx = hx + 3.6, sTop = gs.length > 1 ? stemTop : y - 17;
+          o2 += `<line x1="${f1(sx)}" y1="${f1(y)}" x2="${f1(sx)}" y2="${f1(sTop)}" stroke="${col}" stroke-width="1"/>`;
+          if (gs.length === 1) {
+            o2 += `<g transform="translate(${f1(sx)} ${f1(sTop)}) scale(.62) translate(${f1(-sx)} ${f1(-sTop)})">${svgFlag(sx, sTop, true, col, 1)}</g>`;
+            o2 += `<line x1="${f1(sx - 4)}" y1="${f1(sTop + 11)}" x2="${f1(sx + 5)}" y2="${f1(sTop + 4)}" stroke="${col}" stroke-width="1.1"/>`;   // 빗금
+          }
+        });
+        if (gs.length > 1) {
+          const xa = xs[0] + 3.6, xb = xs[gs.length - 1] + 3.6;
+          o2 += `<rect x="${f1(xa)}" y="${f1(stemTop)}" width="${f1(xb - xa)}" height="2.6" fill="${col}"/><rect x="${f1(xa)}" y="${f1(stemTop + 4.6)}" width="${f1(xb - xa)}" height="2.6" fill="${col}"/>`;
+        }
+        // 꾸밈음에서 원래 음으로 작은 이음줄
+        const g0 = gs[gs.length - 1], gy = yOf(top, g0.pos);
+        const ya = Math.max(gy, gg.yLow) + 5, xa = xs[gs.length - 1] + 1, xb = x - 4;
+        if (xb > xa + 2) o2 += `<path d="M${f1(xa)} ${f1(ya)} Q${f1((xa + xb) / 2)} ${f1(ya + 5)} ${f1(xb)} ${f1(ya)}" fill="none" stroke="${col}" stroke-width="1"/>`;
+      }
       // 기둥 · 꼬리
       if (!n.ph && n.dur !== 'w' && !gg.beam) {
         const sx = up ? x + 5.1 : x - 5.1;
@@ -1045,7 +1100,7 @@ function drawStaffNotes(s, c, g, sys, i, si, out, o, lay) {
         if (n.dur === 'e' || n.dur === 's') o2 += svgFlag(sx, ey, up, col, n.dur === 's' ? 2 : 1);
       }
       // 꾸밈
-      (n.art || []).forEach((a, ai) => {
+      artMarks(n).forEach((a, ai) => {
         const yy = a === 'fermata' ? Math.min(top, gg.yHigh) - 10 - ai * 8 : (gg.stemUp ? gg.yLow + 11 + ai * 8 : gg.yHigh - 11 - ai * 8);
         if (a === 'staccato') o2 += `<circle cx="${f1(x)}" cy="${f1(yy)}" r="1.7" fill="${col}"/>`;
         else if (a === 'tenuto') o2 += `<line x1="${f1(x - 5)}" y1="${f1(yy)}" x2="${f1(x + 5)}" y2="${f1(yy)}" stroke="${col}" stroke-width="1.6"/>`;
@@ -1100,7 +1155,7 @@ function drawStaffNotes(s, c, g, sys, i, si, out, o, lay) {
       let y = Math.max(bot, gg.yLow + 5);
       if (gg.stemUp === false && gg.stemEnd !== undefined) y = Math.max(y, gg.stemEnd + (gg.n.dur === 's' ? 9 : 5));
       // 머리 아래 꾸밈(스타카토·테누토·악센트)과 겹치지 않게 그 밑으로
-      const arts = (gg.n.art || []).filter(a => a !== 'fermata').length;
+      const arts = artMarks(gg.n).filter(a => a !== 'fermata').length;
       if (gg.stemUp && arts) y =Math.max(y, gg.yLow + 11 + (arts - 1) * 8 + 5);
       return y;
     };
