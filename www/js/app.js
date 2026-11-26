@@ -189,7 +189,7 @@ function buildSubbar() {
     h = `<div class="hint one">마디 위 점(또는 점 사이 빈 곳 = 가장 가까운 반 박)을 클릭해 코드 입력 · Enter = 저장 · Space = 반 박씩 옮기기 · Tab = 다음 점 · 빈칸으로 저장 = 지우기</div>`;
   } else if (m === 'lyric') {
     const n = S().lyricLines || 1;
-    h = `<div class="hint one">마디 클릭 → 그 마디 가사 ([두근]처럼 묶으면 한 음에 두 글자 · _ = 한 음 건너뛰기) · Enter = 다음 마디 · 가사 줄 수는 곡 정보에서</div>
+    h = `<div class="hint one">마디 클릭 → 그 마디 가사 ([두근]처럼 묶으면 한 음에 두 글자 · _ = 한 음 건너뛰기 · 띄어쓰기 두 칸 = 빈 음 · - = 한 음) · Enter = 다음 마디 · 가사 줄 수는 곡 정보에서</div>
     ${n > 1 ? `<div class="seg">${Array.from({ length: n }, (_, k) => `<button class="btn" data-verse="${k}">${k + 1}절</button>`).join('')}</div>` : ''}`;
   } else if (m === 'form') {
     h = `<div class="hint one">마디 위쪽 클릭 → Intro, Verse, Chorus … (직접 입력도 돼요)</div>`;
@@ -1479,7 +1479,7 @@ function openLyricEditor(mi) {
   let saved = false;
   const save = () => {
     if (saved) return; saved = true;
-    const val = inp.value.trim();
+    const val = inp.value.trimEnd();   // 앞 띄어쓰기는 남겨요 (두 칸부터 빈 음)
     if ((m.lyrics[v] || '') === val) return;
     History.push(S());
     m.lyrics[v] = val;
@@ -1600,7 +1600,7 @@ const TYPE_LIST = [['single', '오선', '한 줄 악보 · 멜로디·리드시�
 function scoreTypeDialog(startup, edit) {
   const cur = edit ? curType(S()) : null;
   const btns = startup
-    ? `<button class="btn" id="tOpen">열기…</button>${App.saved ? '<button class="btn" id="tCont">이전 작업 이어서</button>' : ''}<span class="grow"></span>`
+    ? `<button class="btn" id="tOpen">열기…</button><button class="btn" id="tLib">내 악보함</button>${App.saved ? '<button class="btn" id="tCont">이전 작업 이어서</button>' : ''}<span class="grow"></span>`
     : `<span class="grow"></span>${edit ? `<button class="btn primary" id="tKeep">이 종류 그대로 →</button>` : ''}<button class="btn" data-close>취소</button>`;
   modal(`<h2>${edit ? '곡 정보 · 악보 종류' : '어떤 악보를 만들까요?'}</h2>
   ${edit ? '<p class="muted small">지금 종류(파란 테두리)를 그대로 고르거나, 다른 종류로 바꿀 수 있어요. 써 둔 음표는 맞는 줄로 옮겨져요.</p>' : ''}
@@ -1611,6 +1611,7 @@ function scoreTypeDialog(startup, edit) {
     const keep = $('#tKeep', md); if (keep) keep.addEventListener('click', () => cur === 'ensemble' ? ensembleDialog(false, true) : newScoreDialog(false, cur, true));
     if (startup) {
       $('#tOpen', md).addEventListener('click', () => openDialog());
+      $('#tLib', md).addEventListener('click', () => libraryDialog());   // 닫으면 다시 이 창으로 (closeModal)
       const cont = $('#tCont', md);
       if (cont) cont.addEventListener('click', () => {
         App.s = App.saved; App.saved = null; leaveBlank(); closeModal();
@@ -1991,7 +1992,7 @@ const SHORTCUTS = [
   ['F1 음표', [['N', '쓰기 모드 켜기/끄기'], ['마디 클릭 (쓰기 모드 끔)', '음표/쉼표 개수 고르기 — 고친 것은 두고 뒤쪽에서 늘리거나 줄임'], ['Caps Lock', '지금 마디(고른 음표·빈 마디 커서가 있는 마디)의 개수 창 열기 — 마디 클릭과 같은 창'], ['H', '화음 탭으로 (멜로디를 다 쓴 다음에)'],['Shift + 클릭 (쓰기 모드)', '그 높이의 음을 화음으로 얹기 · 화음의 머리를 클릭하면 그 음만 고르기'], ['Alt + ↑ ↓', '큰보표·3단 악보에서 위/아래 줄로 옮기기'], ['개수 창이 떠 있을 때', '방향키 = 창 안에서 칸 옮기기 (음표/쉼표 · 숫자 · 쉼표로 채움) · Enter = 고르기 · Esc / Caps Lock = 닫기 — 개수가 정해지면 방향키는 다시 음표 이동'], ['빈 곳 클릭 (쓰기 모드 켬)', '그 높이에 음표 머리 추가'], ['음표 클릭', '고르기 (Shift = 범위, Ctrl = 하나씩 더하기)'], ['3 / ` / 1 / 2 / 4 (숫자열·넘패드)', '길이: 3=16분음표 `=8분음표 1=4분음표 2=2분음표 4=온음표'], ['. / 0', '점 붙이기 / 쉼표로 바꾸기'], ['쉼표 채움 버튼 두 개', '모든 부족한 박자 = 빈 마디까지 전부 · 작업한 마디만 = 음표를 넣어 빨갛게 된 마디만'], ['T', '셋잇단 켜고 끄기'], ['↑ ↓', '오선 한 칸 (Shift = 반음, Ctrl = 옥타브)'], ['A ~ G', '음 이름으로 바로'], ['← → / Enter', '이전·다음 음표 (Ctrl = 다음 마디)'], ['Alt + ← →', '고른 음표를 옆 음표와 자리 바꾸기'], ['끌기', '빈 곳에서 = 여러 개 고르기, 고른 음표 = 다른 마디로 옮기기 (쓰기 모드에선 위아래 = 음높이)'], ['Insert', '고른 음표 뒤에 새 음표'], ['꾸밈·셈여림·글자…', '악센트·스타카토·테누토·마르카토·늘임표 · 셈여림 · 템포·표현 글자 (♩=100 → 재생 빠르기도)'], ['Delete', '지우기']]],
   ['H 화음 (멜로디 잠김)', [['← → / Enter · 클릭', '화음 넣을 자리 옮기기 — 멜로디 박마다, 넣은 화음 음의 시작·끝마다 멈춰요 (Ctrl = 다음 마디)'], ['3 / ` / 1 / 2 / 4', '그 자리에서 시작하는 화음 음 넣기 (멜로디 음 3도 아래) · 이미 있으면 길이 바꾸기 · 멜로디와 리듬이 달라도 돼요 · 마디당 16개까지'], ['.', '그 자리 화음 음에 바로 점 붙이기/떼기'], ['↑ ↓ / A ~ G', '화음 음 높이 (Shift = 반음, Ctrl = 옥타브)'], ['Insert', '그 화음 음에 한 음 더 (3도 아래)'], ['Delete', '그 자리 화음 음 지우기 (멜로디는 안 지워져요)'], ['보이는 모양', '멜로디와 같은 박·같은 길이면 한 기둥 화음 · 리듬이 다르면 멜로디 기둥은 위, 화음 기둥은 아래 · 8분음표끼리는 빔으로 이어요'], ['Alt + ↑ ↓', '위/아래 줄로'], ['Esc / H', '화음 쌓기 끝 → 음표 탭 (멜로디를 다시 고칠 수 있어요)']]],
   ['F2 이음줄', [['음표를 끌어 다른 음표에 놓기', '이음줄 만들기'], ['줄 클릭 → "붙임줄로 바꾸기" / T', '붙임줄 ↔ 이음줄 (붙임줄은 바로 옆 음끼리, 뒤 음 높이를 맞춰요)'], ['+ / S (음표 모드)', '다음 음과 붙임줄 / 이음줄']]],
-  ['F3 ~ F6', [['마디선', '마디선 클릭 = 도돌이·겹세로줄 · 마디 클릭 = 1·2번 괄호, D.S., Coda · 끌기·Shift+클릭 = 여러 마디에 괄호 · 아래 상태줄에 재생 순서'], ['코드', '마디 위 점 클릭 → 입력 · Space / Shift+Space 또는 ◀▶ = 반 박씩 · Tab = 다음 점'], ['가사', '마디 클릭 → 그 마디 가사 ([두근]처럼 묶으면 한 음에 두 글자 · _ = 건너뛰기) · 가사 줄(1절·2절…)은 곡 정보의 "가사 줄 수"로'], ['송폼', '마디 위쪽 클릭 → Intro, Verse, Chorus …']]],
+  ['F3 ~ F6', [['마디선', '마디선 클릭 = 도돌이·겹세로줄 · 마디 클릭 = 1·2번 괄호, D.S., Coda · 끌기·Shift+클릭 = 여러 마디에 괄호 · 아래 상태줄에 재생 순서'], ['코드', '마디 위 점 클릭 → 입력 · Space / Shift+Space 또는 ◀▶ = 반 박씩 · Tab = 다음 점'], ['가사', '마디 클릭 → 그 마디 가사 ([두근]처럼 묶으면 한 음에 두 글자 · _ = 건너뛰기 · 띄어쓰기 두 칸 = 빈 음 · - = 한 음) · 가사 줄(1절·2절…)은 곡 정보의 "가사 줄 수"로'], ['송폼', '마디 위쪽 클릭 → Intro, Verse, Chorus …']]],
   ['F7 마디 편집', [['마디 클릭 / Shift+클릭 / 끌기', '마디 고르기'], ['고른 마디 끌기', '다른 자리로 옮기기 (음표·코드·가사 그대로)'], ['Ctrl+C / Ctrl+X / Ctrl+V', '복사 / 잘라내기 / 고른 마디 뒤에 붙여넣기'], ['Delete', '고른 마디 지우기 — 그 줄만 마디가 줄어요'], ['Insert / "마디 추가하기"', '고른 마디 바로 뒤에 빈 마디'], ['"앞에·뒤에 줄 넣기"', '고른 마디가 놓인 줄 앞·뒤에 새 줄'], ['"줄 지우기"', '고른 마디가 놓인 줄 전체 지우기'], ['마디 폭 "직접 수정"', '파란 마디선을 끌어 폭 바꾸기 · 고른 마디선은 ←→ (Shift = 크게) · "이 줄 똑같이" · Esc = 끝'], ['마디 폭 "자동 수정"', '박자가 다 맞는 줄만 음표 수에 맞춰 폭 나누기']]],
   ['어디서나', [['F1 ~ F7', '모드 바로 가기 (새로고침은 Ctrl+R)'], ['Tab / Shift+Tab', '다음 / 이전 모드'], ['Space', '재생 / 정지 — 초록 표시부터 · 도돌이표·괄호·D.S./D.C.·Coda·Fine을 따라가요'], ['파란 마디', '아직 작업하지 않은 빈 마디'], ['음표 누르기', '그 음을 재생 시작점으로 · ⏮ = 처음부터'], ['Ctrl+Z / Ctrl+Y', '되돌리기 / 다시'], ['Ctrl+S / Ctrl+O / Ctrl+P', '저장 / 열기 (MusicXML도) / 인쇄·PDF'], ['내보내기', 'MusicXML · MIDI · 오디오 WAV · PDF'], ['오른쪽 클릭', '마디 넣기·지우기, 박자 바꾸기, 못갖춘마디, 조 바꾸기'], ['.mid 파일을 마디에 끌어 놓기', '놓은 마디·박부터 악보로 (16분음표 단위, 맨 위 음)'], ['Ctrl + 휠', '확대 / 축소']]]];
 function shortcutsDialog() {
