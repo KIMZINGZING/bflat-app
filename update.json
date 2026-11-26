@@ -1,6 +1,6 @@
 {
- "version": "b0b795a0b704",
- "built": "2026-11-27 03:10",
+ "version": "cbff1b0a5f38",
+ "built": "2026-11-27 03:20",
  "files": {
   "assets/apple-touch-icon.png": {
    "sha256": "e9aca0c2fe30a5f6300661decbd1d578c00c7c0cead84b40374e696224d6712f",
@@ -27,8 +27,8 @@
    "size": 1379
   },
   "css/style.css": {
-   "sha256": "7603708a1a7ee8600a7870c7fccda061b6eec7ec412cc645485ad4cc69f2d08b",
-   "size": 32307
+   "sha256": "4498f68a0b93942f853dc8e1923cc0012275aa4eaee3924abd80a40eb9c2be30",
+   "size": 33659
   },
   "fonts/Griun_Yeeun-Rg.ttf": {
    "sha256": "866cfc5bfb52eacf4e39059524d719775895856eb94f170bcc4f4c89b2ae1aaa",
@@ -39,8 +39,8 @@
    "size": 5303
   },
   "js/app.js": {
-   "sha256": "de7078ca0a9596db124d64e69f8a86143296263d525b620fe198bc9c9946bd7f",
-   "size": 322011
+   "sha256": "f6a29e837af42a31d7fdf8fac9120997cff192d188e8fd6bcd2d317b30273abe",
+   "size": 326649
   },
   "js/audio.js": {
    "sha256": "7f0a57499869b7346c64b032bb935bd12f89af96c1ad27a179c3e91cdedf58f4",
@@ -63,8 +63,8 @@
    "size": 16393
   },
   "js/i18n.js": {
-   "sha256": "cbfc6fcf8ddf0b5c033b4c62d4d338bbdcdc546ff931baf5d60bb3ea6d045ac2",
-   "size": 84636
+   "sha256": "ab5f5d201f101f348513324d7b2204573f21cfb36e11aa5cf17923b908f31915",
+   "size": 84727
   },
   "js/io.js": {
    "sha256": "2546c559d2dd5f5bfba950aad2ab8f90b9090ed249d047d0aa8a962ce36b13ff",
@@ -96,10 +96,10 @@
   }
  },
  "apk": {
-  "versionCode": 3,
-  "versionName": "1.2",
+  "versionCode": 4,
+  "versionName": "1.3",
   "path": "BFlatStudio.apk",
-  "sha256": "fb4f61a4d6e63a70deb151dd5d1d9b2c54665889a77d88d2b2832d73b4fc64fc",
-  "size": 1919133
+  "sha256": "d47c563298e41c9ea49350067be4ee81b4c05c74d8eec9594c25848b8ae39f8e",
+  "size": 1935585
  }
 }
