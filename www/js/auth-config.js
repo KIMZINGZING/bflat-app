@@ -5,4 +5,5 @@
  * apiKey 가 비어 있으면 회원 가입 없이 바로 써요. */
 window.BFLAT_AUTH = {
   apiKey: 'AIzaSyDD7GsHbtWoHaaWmgqVBaFhfq6DPUWYpso',   // Firebase 프로젝트: bflat-studio
+  omrRelay: 'https://bflat-omr.rlawl9939.workers.dev',   // 회원용 클라우드 인식 중계 서버 (cloud-relay/deploy.ps1 이 적어요)
 };
