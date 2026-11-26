@@ -5,7 +5,7 @@ const $$ = (sel, el) => [...(el || document).querySelectorAll(sel)];
 const MODES = [['note', '음표', 'F1'], ['harm', '화음', 'H'], ['slur', '이음줄', 'F2'], ['bar', '마디선', 'F3'], ['chord', '코드', 'F4'], ['lyric', '가사', 'F5'], ['form', '송폼', 'F6'], ['measure', '마디 편집', 'F7']];
 const FORMS = ['Intro', 'Verse', 'Pre-Chorus', 'Chorus', 'Bridge', 'Interlude', 'Solo', 'Outro', 'Ending'];
 const DYNS = ['ppp', 'pp', 'p', 'mp', 'mf', 'f', 'ff', 'fff'];
-const ARTS = [['accent', '>', '악센트'], ['staccato', '·', '스타카토'], ['tenuto', '–', '테누토'], ['marcato', '^', '마르카토'], ['fermata', '𝄐', '늘임표']];
+const ARTS = [['accent', '>', '악센트'], ['staccato', '·', '스타카토'], ['tenuto', '–', '테누토'], ['marcato', '^', '마르카토'], ['fermata', '𝄐', '늘임표'], ['x', '✕', '박자치기 (X 머리 · 손뼉·말하듯 리듬만)']];
 const DUR_GLYPH = { w: '𝅝', h: '𝅗𝅥', q: '♩', e: '♪', s: '𝅘𝅥𝅯' };
 
 const App = {
@@ -116,6 +116,7 @@ function updateStatus() {
   $$('[data-dur]').forEach(b => b.classList.toggle('on', has ? ns.some(x => x.n.dur === b.dataset.dur) : App.curDur === b.dataset.dur));
   const dotB = $('#bDot'); if (dotB) dotB.classList.toggle('on', has && ns.every(x => x.n.dots));
   const triB = $('#bTri'); if (triB) triB.classList.toggle('on', has && ns.every(x => x.n.tri));
+  const grB = $('#bGrace'); if (grB) grB.classList.toggle('on', has && ns.every(x => x.n.gr && x.n.gr.length));
   const dynS = $('#selDyn'); if (dynS) { dynS.disabled = !has; dynS.value = has && ns[0] && ns[0].n.dyn ? ns[0].n.dyn : ''; }
   const wb = $('#bWrite'); if (wb) { wb.classList.toggle('on', App.write); wb.innerHTML = `✎ 쓰기 모드 ${App.write ? '켬' : '끔'}`; }
   const tb = $('#bTieToggle'); if (tb) { const sl = S().slurs.find(x => x.id === App.selSlur); tb.disabled = !sl; tb.textContent = sl && sl.type === 'tie' ? '이음줄로 바꾸기' : '붙임줄로 바꾸기'; }
@@ -164,7 +165,7 @@ function buildSubbar() {
     <button class="btn need-sel" id="bTri" data-act="tri" title="셋잇단 (T)">셋잇단</button>
     <button class="btn" id="bChord" data-act="chordMode" title="화음 탭으로 (H) — 멜로디는 잠그고 화음만 쌓아요">화음 쌓기 → H</button>
     <span class="sep"></span>
-    <div class="seg">${ARTS.map(([k, g, t]) => `<button class="btn need-sel art" data-art="${k}" title="${t}">${g}</button>`).join('')}</div>
+    <div class="seg">${ARTS.map(([k, g, t]) => `<button class="btn need-sel art" data-art="${k}" title="${t}">${g}</button>`).join('')}<button class="btn need-sel art" id="bGrace" data-act="grace" title="꾸밈음 (앞꾸밈음) — 고른 음표 앞에 작은 음 · ↑↓ = 꾸밈음 높이">꾸밈음</button></div>
     <select id="selDyn" class="btn need-sel" title="셈여림"><option value="">셈여림</option>${DYNS.map(d => `<option value="${d}">${d}</option>`).join('')}<option value="-">지우기</option></select>
     <button class="btn need-sel" data-act="text" title="템포·표현 글자 (rit., Swing, ♩=100 …)">글자…</button>
     <span class="sep"></span>
@@ -173,9 +174,10 @@ function buildSubbar() {
     <span class="sep"></span>
     <button class="btn" data-act="toMeasure">줄·마디 편집 →</button>`;
   } else if (m === 'harm') {
-    h = `<div class="hint"><b class="lock">🔒 멜로디 잠김</b> · ←→/클릭 = 화음 넣을 자리 · 길이 키(3 \` 1 2 4) = 그 자리에 화음 음 (리듬 따로 · 마디당 16개까지) · . = 점 · ↑↓/A~G = 높이 · Insert = 한 음 더 · Delete = 지우기 · Esc/H = 끝</div>
+    h = `<div class="hint"><b class="lock">🔒 멜로디 잠김</b> · ←→/클릭 = 화음 넣을 자리 · 길이 키(3 \` 1 2 4) = 그 자리에 화음 음 (리듬 따로 · 마디당 16개까지) · . = 점 · 0 = 쉼표 · ↑↓/A~G = 높이 · Insert = 한 음 더 · Delete = 지우기 · Esc/H = 끝</div>
     <div class="seg">${['w', 'h', 'q', 'e', 's'].map(d => `<button class="btn mus" data-dur="${d}" title="${DUR_KO[d]} 화음 음 얹기 (${Object.keys(NUMKEY_DUR).find(k => NUMKEY_DUR[k] === d)})">${DUR_GLYPH[d]}</button>`).join('')}</div>
     <button class="btn" id="bDot" data-act="dot" title="방금 얹은 화음 음에 점 (.)">점 붙이기 •</button>
+    <button class="btn" id="bHRest" data-act="harmRest" title="화음 성부 쉼표 (0) — 그 자리 화음 음 ↔ 쉼표">쉼표 (0)</button>
     <span class="sep"></span>
     <button class="btn primary" data-act="harmDone">화음 쌓기 끝 → 음표</button>`;
   } else if (m === 'slur') {
@@ -243,9 +245,24 @@ function previewSel() {
   notePitches(x.n).forEach(p => Player.preview(pitchMidi(p), App.settings));
 }
 /* ----- 화음 ----- */
-/** k = -1 이면 원래 음, 0.. 이면 얹은 음 */
-function headPitch(n, k) { return k < 0 ? n.p : (n.ps || [])[k]; }
-function setHeadPitch(n, k, p) { if (k < 0) n.p = p; else n.ps[k] = p; }
+/** k = -1 이면 원래 음, 0.. 이면 얹은 음, -2 이하면 꾸밈음 (-2 = 첫 꾸밈음, -3 = 둘째 …) */
+function headPitch(n, k) { return k <= -2 ? (n.gr || [])[-2 - k] : k < 0 ? n.p : (n.ps || [])[k]; }
+function setHeadPitch(n, k, p) { if (k <= -2) n.gr[-2 - k] = p; else if (k < 0) n.p = p; else n.ps[k] = p; }
+/* ----- 꾸밈음 (앞꾸밈음): n.gr = [{d, a}, …] · 박 길이를 차지하지 않고 원래 음표 바로 앞에 작게 ----- */
+function toggleGrace() {
+  const ns = selNotes().filter(x => !x.n.rest && x.n.p);
+  if (!ns.length) { toast('꾸밈음은 음표에만 붙일 수 있어요 · 음표를 먼저 고르세요'); return; }
+  const all = ns.every(x => x.n.gr && x.n.gr.length);
+  commit(() => ns.forEach(({ n, mi }) => {
+    if (all) delete n.gr;
+    else if (!(n.gr && n.gr.length)) { const d = Math.min(63, n.p.d + 1); n.gr = [{ d, a: keyAlter(App.ctxs[mi].key, mod(d, 7)) }]; }
+    n.edited = true;
+  }));
+  // 하나만 골랐으면 바로 꾸밈음 높이를 고칠 수 있게 그 머리를 골라 둬요
+  App.head = (!all && ns.length === 1) ? { id: ns[0].n.id, k: -2 } : null;
+  render();
+  if (!all) { toast('꾸밈음 · ↑↓/A~G = 꾸밈음 높이 · 꾸밈음을 클릭해 고르고 Delete = 그 꾸밈음만 지우기', 3500); previewSel(); }
+}
 /** 박 위치 (원래 성부는 순서로, 화음 성부는 n.t) */
 function noteStart(x) { return x.ov ? (x.n.t || 0) : App.lay.meas[x.mi].startsSt[x.si][x.ni]; }
 /* ===== 화음 탭: 화음 성부 (멜로디와 리듬이 따로) =====
@@ -312,14 +329,37 @@ function harmPlace(d) {
     commit(() => { ex.dur = d; ex.dots = 0; ex.ph = false; });
   } else {
     if (OVr(m, si).length >= HARM_MAX) { toast(`화음 음은 한 마디에 ${HARM_MAX}개까지예요`); return; }
-    const mel = melodyAt(mi, si, t);
-    let p;
-    if (mel && !mel.rest && mel.p) { const low = notePitches(mel).reduce((a, q) => q.d < a.d ? q : a); const nd = Math.max(7, low.d - 2); p = { d: nd, a: keyAlter(c.key, mod(nd, 7)) }; }
-    else p = defaultPitch(si);
-    const n2 = newNote(d, p); n2.t = t; n2.edited = true;
+    const n2 = newNote(d, harmDefaultPitch(mi, si, t)); n2.t = t; n2.edited = true;
     commit(() => OV(m, si).push(n2));
   }
   App.curDur = d;
+  setHC(mi, si, t);
+}
+/** 새 화음 음의 처음 높이: 그 자리 멜로디 가장 낮은 음의 3도 아래 */
+function harmDefaultPitch(mi, si, t) {
+  const mel = melodyAt(mi, si, t), key = App.ctxs[mi].key;
+  if (mel && !mel.rest && mel.p) { const low = notePitches(mel).reduce((a, q) => q.d < a.d ? q : a); const nd = Math.max(7, low.d - 2); return { d: nd, a: keyAlter(key, mod(nd, 7)) }; }
+  return defaultPitch(si);
+}
+/** 0 : 그 자리 화음 음 ↔ 쉼표 (비어 있으면 지금 길이로 화음 성부 쉼표 넣기) */
+function harmRest() {
+  if (!App.hc) { toast('화음 넣을 자리를 먼저 고르세요 (클릭 또는 ←→)'); return; }
+  const { mi, si, t } = App.hc, m = S().measures[mi], c = App.ctxs[mi];
+  const ex = harmAt(mi, si, t);
+  if (ex) {
+    if (ex.rest) commit(() => { ex.rest = false; ex.ph = false; if (!ex.p) ex.p = harmDefaultPitch(mi, si, t); });
+    else commit(() => { ex.rest = true; ex.ps = []; ex.ph = false; removeSlursFor([ex.id]); });
+  } else {
+    if (OVr(m, si).length >= HARM_MAX) { toast(`화음 음은 한 마디에 ${HARM_MAX}개까지예요`); return; }
+    // 지금 길이가 안 들어가면 들어가는 가장 긴 길이로
+    const order = ['w', 'h', 'q', 'e', 's'];
+    const cands = order.slice(Math.max(0, order.indexOf(App.curDur)));
+    const d = cands.find(x => !harmFits(m, si, t, DUR_T[x], null, c.cap));
+    if (!d) { toast(harmFits(m, si, t, DUR_T[cands[cands.length - 1]], null, c.cap)); return; }
+    const n2 = newNote(d, null, true); n2.t = t; n2.edited = true;
+    commit(() => OV(m, si).push(n2));
+  }
+  App.head = null;
   setHC(mi, si, t);
 }
 /** . : 그 자리 화음 음에 바로 점 */
@@ -338,6 +378,8 @@ function harmPitch(dir, kind, letter) {
   const hc = App.hc; const ex = hc && harmAt(hc.mi, hc.si, hc.t);
   if (!ex) { toast('멜로디는 잠겨 있어요 · 이 자리에 화음 음을 먼저 넣으세요'); return; }
   const key = App.ctxs[hc.mi].key;
+  // 쉼표면 높이 키 = 다시 음으로
+  if (ex.rest || !ex.p) { commit(() => { ex.rest = false; if (!ex.p) ex.p = harmDefaultPitch(hc.mi, hc.si, hc.t); }); if (!letter) return setHC(hc.mi, hc.si, hc.t); }
   const shift = p => {
     p = { d: p.d, a: p.a };
     if (letter) { const step = STEPS.indexOf(letter); let best = null; for (let o = 1; o <= 7; o++) { const d = o * 7 + step; if (best === null || Math.abs(d - p.d) < Math.abs(best - p.d)) best = d; } return { d: best, a: keyAlter(key, step) }; }
@@ -359,6 +401,7 @@ function harmPitch(dir, kind, letter) {
 function harmAddTone() {
   const hc = App.hc; const ex = hc && harmAt(hc.mi, hc.si, hc.t);
   if (!ex) { toast('이 자리에 화음 음이 없어요'); return; }
+  if (ex.rest || !ex.p) { toast('쉼표에는 음을 더할 수 없어요 · ↑↓ 나 0 으로 먼저 음으로 바꾸세요'); return; }
   const key = App.ctxs[hc.mi].key;
   const low = notePitches(ex).reduce((a, q) => q.d < a.d ? q : a);
   const nd = Math.max(7, low.d - 2);
@@ -384,7 +427,8 @@ function moveStep(dir, kind) {
     if (!n.p) n.p = defaultPitch(x.si);
     const key = App.ctxs[x.mi].key;
     // 화음의 한 음만 고른 상태면 그 음만, 아니면 화음 전체를 함께
-    const ks = (hd && hd.id === n.id) ? [hd.k] : [-1].concat((n.ps || []).map((_, k) => k));
+    // (음표 전체를 옮기면 꾸밈음도 같이)
+    const ks = (hd && hd.id === n.id) ? [hd.k] : [-1].concat((n.ps || []).map((_, k) => k), (n.gr || []).map((_, g) => -2 - g));
     ks.forEach(k => {
       let p = headPitch(n, k); if (!p) return;
       p = { d: p.d, a: p.a };
@@ -408,7 +452,7 @@ function setLetter(L) {
     if (!cur) { const prev = prevNote(x.n.id); if (prev && prev.n.p) ref = prev.n.p.d; }
     let best = null;
     for (let o = 1; o <= 7; o++) { const d = o * 7 + step; if (best === null || Math.abs(d - ref) < Math.abs(best - ref)) best = d; }
-    if (k < 0) { n.p = { d: best, a: keyAlter(key, step) }; n.rest = false; } else setHeadPitch(n, k, { d: best, a: keyAlter(key, step) });
+    if (k === -1) { n.p = { d: best, a: keyAlter(key, step) }; n.rest = false; } else setHeadPitch(n, k, { d: best, a: keyAlter(key, step) });
   });
   if (ok) previewSel();
 }
@@ -535,6 +579,11 @@ function deleteSel() {
   if (!ns.length) return;
   // 화음의 얹은 음만 고른 상태면 그 음만 지우기
   const hd = App.head;
+  // 꾸밈음 하나만 고른 상태면 그 꾸밈음만
+  if (hd && ns.length === 1 && hd.id === ns[0].n.id && hd.k <= -2) {
+    commit(() => { const n = ns[0].n; n.gr.splice(-2 - hd.k, 1); if (!n.gr.length) delete n.gr; });
+    App.head = null; render(); return;
+  }
   if (hd && ns.length === 1 && hd.id === ns[0].n.id && hd.k >= 0) {
     commit(() => ns[0].n.ps.splice(hd.k, 1));
     App.head = ns[0].n.ps.length ? { id: hd.id, k: ns[0].n.ps.length - 1 } : null;
@@ -773,6 +822,7 @@ function transposeMeasures(from, to, semis, dSteps) {
       if (!n.p) return;
       n.p = tr(n.p);
       if (n.ps) n.ps = n.ps.map(tr);
+      if (n.gr) n.gr = n.gr.map(tr);
     });
     m.chords.forEach(c => c.name = transposeChordName(c.name, dSteps, semis));
   }
@@ -851,10 +901,11 @@ function hit(p) {
   for (const i of sys.idxs) (lay.meas[i].notesGeo || []).forEach(n => {
     if (n.si !== si) return;
     // 화음이면 가장 가까운 머리로
-    const ys = n.heads ? n.heads.filter(h => !h.ovId).map(h => ({ y: h.y, k: h.k })) : [{ y: n.y, k: -1 }];
+    const ys = n.heads ? n.heads.filter(h => !h.ovId).map(h => ({ x: n.x, y: h.y, k: h.k, w: 9 })) : [{ x: n.x, y: n.y, k: -1, w: 9 }];
+    (n.graceHeads || []).forEach(h => ys.push({ x: h.x, y: h.y, k: h.k, w: 5 }));   // 꾸밈음 머리 (작아요)
     ys.forEach(h => {
-      const dx = Math.abs(n.x - p.x), dy = Math.abs(h.y - p.y);
-      if (dx < 9 && dy < (n.rest ? 16 : 7)) { const d = dx + dy; if (d < best) { best = d; out.note = n; out.headK = h.k; } }
+      const dx = Math.abs(h.x - p.x), dy = Math.abs(h.y - p.y);
+      if (dx < h.w && dy < (n.rest ? 16 : 7)) { const d = dx + dy; if (d < best) { best = d; out.note = n; out.headK = h.k; } }
     });
   });
   const top = tops[si], bot = top + 4 * SP;
@@ -947,7 +998,7 @@ function downNote(e, p, h) {
     const id = h.note.id;
     App.selMeasures = []; App.staff = h.note.si;
     // 화음의 한 머리를 누르면 그 음만 고른 상태 (↑↓·Delete가 그 음에만)
-    App.head = (h.note.n.ps && h.note.n.ps.length && h.headK !== undefined) ? { id, k: h.headK } : null;
+    App.head = (h.headK !== undefined && (h.headK <= -2 || (h.note.n.ps && h.note.n.ps.length))) ? { id, k: h.headK } : null;
     if (e.ctrlKey) App.sel = App.sel.includes(id) ? App.sel.filter(x => x !== id) : App.sel.concat(id);
     else if (e.shiftKey && App.anchor) {
       const a = allNotes(h.note.si); const i1 = a.findIndex(x => x.n.id === App.anchor), i2 = a.findIndex(x => x.n.id === id);
@@ -956,7 +1007,7 @@ function downNote(e, p, h) {
     } else if (!App.sel.includes(id)) App.sel = [id];
     if (!e.shiftKey) App.anchor = id;
     render(); previewSel();
-    const orig = selNotes().map(x => ({ id: x.n.id, p: x.n.p ? clone(x.n.p) : null, ps: clone(x.n.ps || []) }));
+    const orig = selNotes().map(x => ({ id: x.n.id, p: x.n.p ? clone(x.n.p) : null, ps: clone(x.n.ps || []), gr: x.n.gr ? clone(x.n.gr) : null }));
     App.drag = { type: App.write ? 'pitch' : 'nmove', p0: p, orig, moved: false, pushed: false, head: App.head };
     return;
   }
@@ -1015,8 +1066,9 @@ function onMouseMove(e) {
       const key = App.ctxs[f.mi].key;
       const mv = q => { const nd = Math.max(7, Math.min(63, q.d + steps)); return { d: nd, a: keyAlter(key, mod(nd, 7)) }; };
       if (d.head && d.head.id === o.id && d.head.k >= 0) { f.n.ps[d.head.k] = mv(o.ps[d.head.k]); }
+      else if (d.head && d.head.id === o.id && d.head.k <= -2) { if (o.gr && f.n.gr) f.n.gr[-2 - d.head.k] = mv(o.gr[-2 - d.head.k]); }
       else if (d.head && d.head.id === o.id) { f.n.p = mv(o.p); }
-      else { f.n.p = mv(o.p); f.n.ps = o.ps.map(mv); }
+      else { f.n.p = mv(o.p); f.n.ps = (o.ps || []).map(mv); if (o.gr) f.n.gr = o.gr.map(mv); }
       f.n.rest = false; f.n.edited = true;
     });
     if (steps !== d.lastSteps) { d.lastSteps = steps; render(); previewSel(); }
@@ -2279,6 +2331,8 @@ async function getOmrXml(want) {
   want = want || {};
   if (want.lyrics && want.lyrics !== 'en') want.lyrics = 'ko';
   if (!Pdf.file) { toast('먼저 PDF 악보를 여세요'); return null; }
+  // 꾸밈음·X 머리 찾기를 바꾸면 남겨 둔 결과는 못 써요 (다른 설정으로 읽은 것)
+  if (!!Pdf.omrSmall !== !!want.small) { Pdf.omrSongs = null; Pdf.omrXml = null; Pdf.omrLyr = null; Pdf.omrSmall = !!want.small; }
   if (want.engine) {             // 새 엔진은 곡 목록(Pdf.omrSongs)을 따로 남겨요
     if (Pdf.omrSongs && Pdf.omrSongsKey === (want.lyrics || 'none')) return Pdf.omrSongs[0].xml;
     Pdf.omrSongs = null;
@@ -2286,6 +2340,7 @@ async function getOmrXml(want) {
     if (want.lyrics ? Pdf.omrLyr && Pdf.omrLyrLang === want.lyrics : Pdf.omrXml) return want.lyrics ? Pdf.omrLyr : Pdf.omrXml;
     if (!want.lyrics && Pdf.omrLyr) return Pdf.omrLyr;
   }
+  await omrLocalProbe();
   const api = OmrApi();
   if (!api || !api.omr_status) { modal(`<h2>자동 인식</h2><p>자동 인식은 <b>바탕화면 프로그램</b>(BFlat Studio)에서만 돼요. 브라우저에서는 PDF를 옆에 띄워 보면서 쓸 수 있어요.</p><div class="modal-btns"><button class="btn primary" data-close>확인</button></div>`); return null; }
   const st = await api.omr_status();
@@ -2300,7 +2355,7 @@ async function getOmrXml(want) {
   busy.hidden = false;
   try {
     if (want.engine && !remote) { busy.querySelector('b').textContent = LG('새 엔진으로 악보 인식 중…', 'Recognizing with the new engine…', '新しいエンジンで認識中…'); busy.querySelector('span').textContent = LG('제목·가사·코드까지 읽어요 · 한 쪽에 30초~1분쯤 걸려요', 'Reads title, lyrics and chords too · about 30 s–1 min per page', 'タイトル・歌詞・コードも読みます · 1ページ30秒〜1分'); }
-    const res = await api.omr_pdf(await blobToB64(Pdf.file), Pdf.name, want.lyrics || false, !!want.engine);
+    const res = await api.omr_pdf(await blobToB64(Pdf.file), Pdf.name, want.lyrics || false, !!want.engine, !!want.small);
     if (remote && res && (['net', 'timeout', 'http', 'lost', 'code', 'blocked'].includes(res.error) || /^cloud/.test(res.error || ''))) {
       if (res.error !== 'timeout') PcLink.okAt = 0;
       const cloud = /^cloud/.test(res.error);
@@ -2427,8 +2482,8 @@ async function ensureOcr() {
 /** PDF 자동 인식 → 고칠 수 있는 BFlat 악보로 열기 */
 async function pdfRecognize() {
   if (!Pdf.file) { toast('먼저 PDF 악보를 여세요'); return; }
-  let lyrics = false, lyrLang = (App.settings && App.settings.lang === 'en') ? 'en' : 'ko';
-  try { lyrics = localStorage.getItem('bflat.omrLyrics') === '1'; lyrLang = localStorage.getItem('bflat.omrLyrLang') || lyrLang; } catch (e) { }
+  let lyrics = false, lyrLang = (App.settings && App.settings.lang === 'en') ? 'en' : 'ko', small = false;
+  try { lyrics = localStorage.getItem('bflat.omrLyrics') === '1'; lyrLang = localStorage.getItem('bflat.omrLyrLang') || lyrLang; small = localStorage.getItem('bflat.omrSmall') === '1'; } catch (e) { }
   const ok = await new Promise(res => modal(`<h2>자동 인식 → 악보로</h2><p>PDF 속 음표를 읽어 <b>새 악보</b>로 열어요.${App.blank ? '' : ' 지금 악보는 되돌리기(Ctrl+Z)할 수 있지만, 따로 남기려면 먼저 저장하세요.'}</p>
     ${Pdf.space && Pdf.space < OMR_MIN_SPACE ? `<p class="small" style="color:var(--red);font-weight:600" data-notr>${esc(lowResText())}</p>` : ''}
     <label class="omr-lyr"><input type="checkbox" id="omrLyr"${lyrics ? ' checked' : ''}> <b>가사도 함께 가져올까요?</b></label>
@@ -2436,23 +2491,27 @@ async function pdfRecognize() {
     <div class="omr-lyr-lang" style="margin:2px 0 6px 22px">${LG('가사 언어', 'Lyrics language', '歌詞の言語')}:
       <label style="margin-left:8px"><input type="radio" name="omrLyrLang" value="ko"${lyrLang !== 'en' ? ' checked' : ''}> ${LG('한글', 'Korean', '韓国語')}</label>
       <label style="margin-left:8px"><input type="radio" name="omrLyrLang" value="en"${lyrLang === 'en' ? ' checked' : ''}> ${LG('영어', 'English', '英語')}</label></div>
+    <label class="omr-lyr"><input type="checkbox" id="omrSmall"${small ? ' checked' : ''}> <b>${LG('꾸밈음 · 박자치기(X 머리)도 찾기', 'Also find grace notes · X noteheads', '装飾音・X 符頭も探す')}</b></label>
+    <p class="muted small" style="margin-top:4px">${LG('꾸밈음이나 X 머리가 있는 악보만 체크하세요. 작은 음표까지 찾느라 <b>다른 음표·박자를 더 많이 틀릴 수 있어요</b> (시험한 악보: 박자 틀린 마디 20% → 26%). 새 인식 엔진은 두 인식 결과 중 더 정확한 쪽을 골라서, 그 결과에 없는 꾸밈음은 빠질 수 있어요.못 찾은 꾸밈음은 음표 탭의 "꾸밈음" 버튼으로 넣을 수 있어요.', 'Tick only for scores with grace notes or X noteheads. Looking for small notes can <b>misread other notes and beats more often</b> (in a test: wrong-beat measures 20% → 26%). The new engine picks the more accurate of two results, so grace notes missing from that one may be left out. Add missed ones with the "Grace" button in the Notes tab.', '装飾音やX符頭がある楽譜だけチェックしてください。小さい音符まで探すため<b>他の音符・拍の誤りが増えることがあります</b> (テスト: 拍の誤り 20% → 26%)。新しいエンジンは2つの認識結果のうち正確な方を選ぶので、そちらにない装飾音は入らないことがあります。見つからない装飾音は音符タブの「装飾音」ボタンで入れられます。')}</p>
     <p class="muted small">인쇄된 깨끗한 악보일수록 잘 읽어요. 셈여림표(f, p …)는 넣지 않아요. 틀린 음·박자는 옆의 PDF를 보면서 고쳐 주세요.</p>
     <p class="muted small">${LG('한 파일에 여러 곡(예: 찬송가 여러 장)이 들어 있으면, 섞이지 않게 1곡씩 나눠서 변환하고 곡 이름으로 내 악보함에 저장해요.', 'If the file has several songs (e.g. several hymns), each song is converted separately and saved to My scores by its title.', '1つのファイルに複数の曲(例: 讃美歌数曲)があれば、混ざらないよう1曲ずつ変換し、曲名でマイ楽譜に保存します。')}</p>
     <div class="modal-btns"><button class="btn" data-close>취소</button><button class="btn primary" data-ok>인식 시작</button></div>`, md => {
       md.querySelector('[data-ok]').addEventListener('click', () => {
         lyrics = $('#omrLyr', md).checked;
+        small = $('#omrSmall', md).checked;
         const lr = md.querySelector('input[name="omrLyrLang"]:checked'); if (lr) lyrLang = lr.value;
         App.onModalClose = null; closeModal(); res(true);
       });
       App.onModalClose = () => res(false);
     }));
   if (!ok) return;
-  try { localStorage.setItem('bflat.omrLyrics', lyrics ? '1' : '0'); localStorage.setItem('bflat.omrLyrLang', lyrLang); } catch (e) { }
+  try { localStorage.setItem('bflat.omrLyrics', lyrics ? '1' : '0'); localStorage.setItem('bflat.omrLyrLang', lyrLang); localStorage.setItem('bflat.omrSmall', small ? '1' : '0'); } catch (e) { }
+  await omrLocalProbe();
   const api = OmrApi();
   if (lyrics && api && api.ocr_install) { const o = await ensureOcr(); if (o === null) return; if (!o) lyrics = false; }
   if (lyrics) lyrics = lyrLang;          // 'ko' · 'en' → 글자 인식 주 언어 (omrcore.order_langs)
   const engine = await ensureEngine(api); if (engine === null) return;
-  const raw = await getOmrXml({ lyrics, engine }); if (!raw) return;
+  const raw = await getOmrXml({ lyrics, engine, small }); if (!raw) return;
   // 여러 곡이 든 PDF(찬송가 책 등) → 안내하고 1곡씩 나눠서 변환 · 내 악보함에 곡 이름으로 저장
   let songs = [];
   if (engine && Pdf.omrSongs) songs = Pdf.omrSongs.map(sg => ({ xml: sg.xml, title: sg.title, pages: sg.pages || [1, 1], measures: sg.measures, engine: sg.engine }));
@@ -2466,7 +2525,7 @@ async function pdfRecognize() {
   if (songs.length > 1 && engine && Pdf.omrSongs) {
     // 한 악보로 합치기: 새 엔진은 곡마다 따로 만들어서, 예전 방식(Audiveris 한 번)으로 다시 인식해요
     toast(LG('한 악보로 합치려고 예전 방식으로 한 번 더 인식해요', 'Recognizing once more with the old method to combine', '一つにまとめるため従来の方法で再認識します'), 4000);
-    xml = await getOmrXml({ lyrics }); if (!xml) return;
+    xml = await getOmrXml({ lyrics, small }); if (!xml) return;
   }
   try { xml = omrForImport(raw, { lyrics }); } catch (e) { console.error(e); }
   const swing = await detectSwing(Pdf.file);
@@ -2587,7 +2646,7 @@ async function omrSaveSongs(songs, lyrics) {
 /* ----- PDF 위에 바로 계이름 ----- */
 async function pdfSolfa() {
   if (Pdf.solOn) return pdfSolOff();
-  const xml = await getOmrXml(); if (!xml) return;
+  const xml = await getOmrXml({ small: Pdf.omrSmall }); if (!xml) return;   // 이미 읽은 결과가 있으면 그대로
   Pdf.lay = omrLayout(xml);
   if (!Pdf.lay.items.length) { toast('계이름을 적을 음표를 찾지 못했어요'); return; }
   Pdf.solStaves = Pdf.lay.staves.map(() => true);
@@ -2807,8 +2866,14 @@ function omrInstallHelp() {
  * PC: phonelink.py · 앱: PcLink.java (AndroidBridge.pcFind / pcCall / pcTake)
  * 아래 MobileOmr 는 PC 프로그램의 omr_status · omr_pdf · ocr_install 과 똑같이 생겨서, 인식 다음 과정(가사·세뇨/코다·스윙·계이름)은 PC와 똑같이 돌아요. */
 function OmrApi() {
-  const n = Native(); if (n && n.omr_status) return n;
+  const n = Native(); if (n && n.omr_status && !(OmrApi.noLocal && CloudOmr.get())) return n;
   return window.AndroidBridge || CloudOmr.get() ? MobileOmr : null;
+}
+/** PC 프로그램인데 이 PC에 Audiveris가 없고 회원 클라우드가 있으면 → 클라우드로 인식해요 (설치하면 다시 PC에서) */
+async function omrLocalProbe() {
+  const n = Native();
+  if (!n || !n.omr_status || !CloudOmr.get()) return;
+  try { const st = await n.omr_status(); OmrApi.noLocal = !(st && st.ok); } catch (e) { }
 }
 const PcLink = {
   n: 0, wait: {}, okAt: 0,
@@ -2856,7 +2921,17 @@ const PcLink = {
  * inbox/<id>.pdf 올리기 → GitHub 서버가 PC와 같은 Audiveris로 인식 (omr/omrjob.py) → outbox/<id>.json 가져오기 → 치우기
  * 연결 코드는 PC 프로그램 설정 → 휴대폰 앱 → 밖에서 자동 인식 에서 만들어요. 휴대폰 데이터·와이파이만 있으면 어디서나 돼요. */
 const CloudOmr = {
-  get() { try { const c = JSON.parse(localStorage.getItem('bflat.cloudOmr') || 'null'); return c && c.o && c.r && c.t ? c : null; } catch (e) { return null; } },
+  /** 회원용 중계 서버 주소 (js/auth-config.js 의 omrRelay · 관리자가 cloud-relay/deploy.ps1 로 한 번 준비해요)
+   *  이메일 인증까지 마친 회원이면 연결 코드 없이 바로 써요. 저장소 열쇠(토큰)는 중계 서버에만 있어요. */
+  relay() {
+    const u = String((window.BFLAT_AUTH && window.BFLAT_AUTH.omrRelay) || '').trim().replace(/\/+$/, '');
+    if (!/^https:\/\//.test(u) || typeof Auth === 'undefined' || !Auth.on()) return '';
+    const a = Auth.get();
+    return a && a.verified ? u : '';
+  },
+  /** 직접 넣은 연결 코드 (관리자 본인 · 예전 방식) */
+  own() { try { const c = JSON.parse(localStorage.getItem('bflat.cloudOmr') || 'null'); return c && c.o && c.r && c.t ? c : null; } catch (e) { return null; } },
+  get() { const r = this.relay(); return this.own() || (r ? { relay: r } : null); },
   set(c) { try { if (c) localStorage.setItem('bflat.cloudOmr', JSON.stringify(c)); else localStorage.removeItem('bflat.cloudOmr'); } catch (e) { } },
   parse(code) {
     const m = /BFLAT1:([A-Za-z0-9_-]+)/.exec(String(code || '').replace(/\s+/g, ''));
@@ -2889,11 +2964,55 @@ const CloudOmr = {
     if (w.status === 404) return { error: 'cloudsetup' };
     return { ok: true };
   },
-  async omr(b64, lyrics, onTick, engine) {
+  /** 중계 서버 부르기 (회원 출입증을 붙여서) → { status, data } */
+  async rq(base, method, path, body) {
+    for (let again = 0; again < 2; again++) {
+      const tok = await Auth.idToken(again > 0);
+      if (tok.error) return { status: tok.error === 'NETWORK' ? 0 : 401, data: { error: 'auth' } };
+      let res;
+      try {
+        res = await fetch(base + path, { method, cache: 'no-store', body,
+          headers: Object.assign({ Authorization: 'Bearer ' + tok.idToken }, body ? { 'Content-Type': 'text/plain' } : {}) });
+      } catch (e) { return { status: 0 }; }
+      let data = null; try { data = await res.json(); } catch (e) { }
+      // 가입 직후 받아 둔 출입증엔 "이메일 인증 전"이라고 적혀 있어요 → 새로 받아서 한 번 더
+      if ((res.status === 401 || res.status === 403) && !again) continue;
+      return { status: res.status, data };
+    }
+  },
+  relayErr(r) {
+    const e = r.data && r.data.error;
+    if (r.status === 0) return 'cloudnet';
+    if (r.status === 401 || e === 'auth' || e === 'expired') return 'cloudauth';
+    if (r.status === 403 && e === 'verify') return 'cloudverify';
+    if (r.status === 429) return r.data && r.data.scope === 'month' ? 'cloudmonth' : 'cloudlimit';
+    if (r.status === 413) return 'cloudbig';
+    return 'cloudhttp';
+  },
+  /** 회원: 중계 서버에 맡기기 → 결과 기다리기 */
+  async relayOmr(base, b64, lyrics, onTick, engine, small) {
+    const q = `?lyrics=${lyrics === 'en' ? 'en' : lyrics ? 'ko' : ''}${engine ? '&engine=1' : ''}${small ? '&small=1' : ''}`;
+    const up = await this.rq(base, 'POST', '/omr' + q, b64);
+    if (up.status !== 200 || !up.data || !up.data.id) return { error: this.relayErr(up), limit: up.data && up.data.limit };
+    const id = up.data.id, t0 = Date.now();
+    let fails = 0;
+    while (Date.now() - t0 < 25 * 60000) {
+      onTick && onTick(Math.round((Date.now() - t0) / 1000));
+      await new Promise(r => setTimeout(r, 6000));
+      const r = await this.rq(base, 'GET', '/omr/' + id);
+      if (r.status === 202) { fails = 0; continue; }
+      if (r.status === 200 && r.data) return r.data;
+      if (r.status === 200) return { error: 'failed', log: 'result' };
+      if (++fails >= 6) return { error: this.relayErr(r) };
+    }
+    return { error: 'cloudtimeout' };
+  },
+  async omr(b64, lyrics, onTick, engine, small) {
     const c = this.get(); if (!c) return { error: 'cloudsetup' };
+    if (c.relay) return this.relayOmr(c.relay, b64, lyrics, onTick, engine, small);
     const id = Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
-    // 파일 이름 = 요청 내용: .lyrics(한글 가사) · .lyrics-en(영어 가사) · .x(새 인식 엔진)
-    const up = await this.gh(c, 'PUT', `/contents/inbox/${id}${lyrics === 'en' ? '.lyrics-en' : lyrics ? '.lyrics' : ''}${engine ? '.x' : ''}.pdf`, { message: '인식 요청', content: b64 });
+    // 파일 이름 = 요청 내용: .lyrics(한글 가사) · .lyrics-en(영어 가사) · .x(새 인식 엔진) · .g(꾸밈음·X 머리도)
+    const up = await this.gh(c, 'PUT', `/contents/inbox/${id}${lyrics === 'en' ? '.lyrics-en' : lyrics ? '.lyrics' : ''}${engine ? '.x' : ''}${small ? '.g' : ''}.pdf`, { message: '인식 요청', content: b64 });
     if (up.status !== 201 && up.status !== 200) return { error: this.err(up.status) };
     const t0 = Date.now();
     let fails = 0;
@@ -2927,6 +3046,11 @@ const MobileOmr = {
       cloudsetup: LG('PC에서 클라우드 준비를 아직 안 했어요 · PC 설정 → 휴대폰 앱 → 밖에서 자동 인식 → "준비하기"', 'Cloud setup is not done yet · on the PC: Settings → Phone app → Recognize outside → "Set up"', 'クラウドの準備がまだです · PCの 設定 → スマホアプリ → 外で自動認識 →「準備する」'),
       cloudtimeout: LG('클라우드가 25분 안에 끝내지 못했어요 · GitHub 서버가 바쁠 수 있어요. 조금 뒤 다시 해 주세요', 'The cloud did not finish in 25 minutes · GitHub may be busy. Try again later', 'クラウドが25分以内に終わりませんでした · 少し後でもう一度お試しください'),
       cloudhttp: LG('GitHub에서 오류가 났어요 · 잠시 뒤 다시 해 주세요', 'GitHub returned an error · try again shortly', 'GitHubでエラーが出ました · 少し後でもう一度お試しください'),
+      cloudauth: LG('회원 로그인을 확인하지 못했어요 · 설정 → 계정에서 로그아웃했다가 다시 로그인해 주세요', 'Could not confirm your login · log out and back in under Settings → Account', 'ログインを確認できませんでした · 設定 → アカウントでログアウトして再ログインしてください'),
+      cloudverify: LG('이메일 인증을 마친 회원만 쓸 수 있어요 · 받은 인증 메일의 링크를 눌러 주세요', 'Only members with a verified email can use this · click the link in the verification email', 'メール認証を終えた会員のみ使えます · 認証メールのリンクを押してください'),
+      cloudlimit: LG(`오늘 맡길 수 있는 횟수(${(r && r.limit) || ''}번)를 다 썼어요 · 내일 다시 해 주세요`, `You have used today's recognition limit (${(r && r.limit) || ''}) · try again tomorrow`, `本日の認識回数(${(r && r.limit) || ''}回)を使い切りました · 明日もう一度お試しください`),
+      cloudmonth: LG('이번 달 클라우드 인식 횟수가 다 찼어요 · 다음 달에 다시 해 주세요 (집 PC 연결은 계속 돼요)', 'This month\'s cloud recognition quota is used up · try next month (the home PC link still works)', '今月のクラウド認識枠が上限に達しました · 来月お試しください (家のPC接続は使えます)'),
+      cloudbig: LG('PDF가 너무 커요 (30MB까지) · 쪽을 나눠서 해 주세요', 'The PDF is too large (max 30 MB) · split it into parts', 'PDFが大きすぎます (30MBまで) · 分けてください'),
     }[e];
     return cloud || PcLink.errText(r);
   },
@@ -2943,19 +3067,19 @@ const MobileOmr = {
     if (!how) return { cancel: true };
     return this.omr_status();
   },
-  async omr_pdf(b64, name, lyrics, engine) {
+  async omr_pdf(b64, name, lyrics, engine, small) {
     PcLink.awake(true);
     try {
       if (this.mode === 'pc') {
         const pc = PcLink.get(); if (!pc) return { error: 'net' };
-        return await PcLink.call(pc, 'omr_pdf', [b64, name, lyrics || false, !!engine]);   // 'ko' · 'en' (예전 PC 프로그램은 true 로 받아요)
+        return await PcLink.call(pc, 'omr_pdf', [b64, name, lyrics || false, !!engine, !!small]);   // 'ko' · 'en' (예전 PC 프로그램은 true 로 받아요)
       }
       const span = $('#pdfBusy span');
       return await CloudOmr.omr(b64, lyrics, s => {
         if (span) span.textContent = engine
           ? LG(`${Math.floor(s / 60)}분 ${s % 60}초 지남 · 새 엔진은 보통 3~6분 걸려요 (제목·가사·코드까지) · 앱을 닫지 말고 기다려 주세요`, `${Math.floor(s / 60)}m ${s % 60}s · the new engine usually takes 3–6 min · keep the app open`, `${Math.floor(s / 60)}分${s % 60}秒経過 · 新エンジンは通常3〜6分`)
           : LG(`${Math.floor(s / 60)}분 ${s % 60}초 지남 · 보통 1~3분 걸려요 (처음 한 번은 조금 더) · 앱을 닫지 말고 기다려 주세요`, `${Math.floor(s / 60)}m ${s % 60}s · usually 1–3 min (a bit longer the first time) · keep the app open`, `${Math.floor(s / 60)}分${s % 60}秒経過 · 通常1〜3分 (初回は少し長め) · アプリを閉じずにお待ちください`);
-      }, engine);
+      }, engine, small);
     } finally { PcLink.awake(false); }
   },
   async ocr_install() {
@@ -3078,15 +3202,32 @@ function pcConnectDialog(why) {
 }
 /** 설정 → 휴대폰 앱 (안드로이드 앱에서): 연결한 PC 보기 · 바꾸기 · 끊기 */
 function mobileOmrPane(el) {
-  const c = CloudOmr.get();
+  const c = CloudOmr.own(), relay = CloudOmr.relay(), acc = relay && Auth.get();
+  // 회원이면 연결 코드 없이 바로 연결돼요 · 연결 코드 칸은 관리자용으로 접어 둬요
+  const codeBox = c
+    ? `<div class="small">${LG('연결 코드로 연결됨', 'Connected with a link code', 'リンクコードで接続済み')} ✓ <span data-notr>${esc(c.o)}/${esc(c.r)}</span> <button class="btn" id="ccOff" style="min-height:0;padding:1px 8px">${LG('연결 끊기', 'Disconnect', '接続解除')}</button></div>`
+    : relay ? `<details style="margin-top:8px"><summary class="small muted">${LG('관리자용: 연결 코드 직접 넣기', 'Admin: enter a link code', '管理者用: リンクコードを入力')}</summary><div id="ccForm"></div></details>`
+      : '<div id="ccForm"></div>';
   el.innerHTML = `<div class="pl-box"><h3 style="margin:0 0 4px">☁ ${LG('밖에서 자동 인식 (클라우드)', 'Recognize anywhere (cloud)', '外で自動認識 (クラウド)')}</h3>
-    <p class="muted small" style="margin:0 0 6px">${LG('PC가 꺼져 있어도 휴대폰 데이터만 있으면 GitHub 무료 서버가 PC와 같은 Audiveris로 인식해요 (한 번에 1~3분). PC 프로그램 <b>⚙ 설정 → 휴대폰 앱 → 밖에서 자동 인식</b>에서 나온 <b>연결 코드</b>를 붙여 넣어요.', 'Even with the PC off, a free GitHub server recognizes with the same Audiveris as the PC, using just mobile data (1–3 min each). Paste the <b>link code</b> from the PC program (<b>⚙ Settings → Phone app → Recognize outside</b>).', 'PCが消えていても、モバイルデータだけでGitHubの無料サーバーがPCと同じAudiverisで認識します (1回1〜3分)。PCの<b>⚙ 設定 → スマホアプリ → 外で自動認識</b>で出た<b>リンクコード</b>を貼り付けます。')}</p>
-    ${c ? `<div class="small">${LG('연결됨', 'Connected', '接続済み')} ✓ <span data-notr>${esc(c.o)}/${esc(c.r)}</span> <button class="btn" id="ccOff" style="min-height:0;padding:1px 8px">${LG('연결 끊기', 'Disconnect', '接続解除')}</button></div>` : '<div id="ccForm"></div>'}
+    <p class="muted small" style="margin:0 0 6px">${relay
+      ? LG('PC가 꺼져 있어도 인터넷만 있으면 클라우드 서버가 PC와 같은 Audiveris로 인식해요 (한 번에 1~3분). <b>회원 계정으로 자동 연결</b>돼서 따로 넣을 것이 없어요.', 'Even with the PC off, a cloud server recognizes with the same Audiveris as the PC, using just the internet (1–3 min each). It connects <b>automatically with your account</b> — nothing to enter.', 'PCが消えていても、インターネットだけでクラウドサーバーがPCと同じAudiverisで認識します (1回1〜3分)。<b>会員アカウントで自動接続</b>されるので入力は不要です。')
+      : LG('PC가 꺼져 있어도 휴대폰 데이터만 있으면 GitHub 무료 서버가 PC와 같은 Audiveris로 인식해요 (한 번에 1~3분). PC 프로그램 <b>⚙ 설정 → 휴대폰 앱 → 밖에서 자동 인식</b>에서 나온 <b>연결 코드</b>를 붙여 넣어요.', 'Even with the PC off, a free GitHub server recognizes with the same Audiveris as the PC, using just mobile data (1–3 min each). Paste the <b>link code</b> from the PC program (<b>⚙ Settings → Phone app → Recognize outside</b>).', 'PCが消えていても、モバイルデータだけでGitHubの無料サーバーがPCと同じAudiverisで認識します (1回1〜3分)。PCの<b>⚙ 設定 → スマホアプリ → 外で自動認識</b>で出た<b>リンクコード</b>を貼り付けます。')}</p>
+    ${relay && !c ? `<div class="small">${LG('회원 계정으로 연결됨', 'Connected with your account', '会員アカウントで接続済み')} ✓ <b data-notr>${esc(acc ? acc.email : '')}</b> <span class="muted" id="ccLeft"></span></div>` : ''}
+    ${codeBox}
   </div>
   ${window.AndroidBridge ? '<div id="pcPart" style="margin-top:12px"></div>' : ''}`;
   const off = $('#ccOff', el); if (off) off.addEventListener('click', () => { CloudOmr.set(null); mobileOmrPane(el); });
   if (!c) cloudCodeForm($('#ccForm', el), () => setTimeout(() => { if (el.isConnected) mobileOmrPane(el); }, 900));
+  if (relay && !c) relayLeft($('#ccLeft', el));
   if (window.AndroidBridge) pcLinkPane($('#pcPart', el));
+}
+/** 회원: 오늘 남은 클라우드 인식 횟수 (중계 서버에 물어봐요 · 안 되면 조용히 비워 둬요) */
+async function relayLeft(span) {
+  const base = CloudOmr.relay(); if (!span || !base) return;
+  const r = await CloudOmr.rq(base, 'GET', '/me');
+  if (!span.isConnected) return;
+  if (r.status === 200 && r.data && r.data.left != null) span.textContent = LG(`· 오늘 ${r.data.left}번 더 쓸 수 있어요`, `· ${r.data.left} left today`, `· 今日あと${r.data.left}回`);
+  else if (r.status && r.status !== 200) { span.textContent = '· ' + MobileOmr.errText({ error: CloudOmr.relayErr(r) }); span.style.color = '#dc2626'; }
 }
 function pcLinkPane(el) {
   const pc = PcLink.get();
@@ -3125,8 +3266,25 @@ async function cloudPcBox(box) {
   const api = Native();
   if (!api || !api.cloud_status) { box.remove(); return; }
   const st = await api.cloud_status();
+  const relay = CloudOmr.relay();
+  // 회원: 관리자가 중계 서버를 준비해 뒀으면 이 PC에 Audiveris가 없어도 클라우드로 인식돼요 · 아래 준비 칸은 관리자용
+  if (relay && !st.hasToken) {
+    box.innerHTML = `<div class="pl-box"><h3 style="margin:0 0 4px">☁ ${LG('클라우드 자동 인식', 'Cloud recognition', 'クラウド自動認識')}</h3>
+      <div class="small">${LG('회원 계정으로 연결됨', 'Connected with your account', '会員アカウントで接続済み')} ✓ <b data-notr>${esc((Auth.get() || {}).email || '')}</b> <span class="muted" id="ccLeft"></span></div>
+      <p class="muted small" style="margin:6px 0 0">${LG('이 PC에 Audiveris가 없어도 "자동 인식"을 누르면 클라우드 서버가 대신 인식해요. 휴대폰·태블릿도 같은 계정으로 로그인하면 바로 돼요.', 'Even without Audiveris on this PC, "Recognize" uses the cloud server. Phones and tablets work too once signed in with the same account.', 'このPCにAudiverisがなくても「自動認識」でクラウドサーバーが認識します。スマホ・タブレットも同じアカウントでログインすればすぐ使えます。')}</p>
+      <details style="margin-top:8px"><summary class="small muted">${LG('관리자용: 내 GitHub 저장소로 준비하기', 'Admin: set up with my GitHub repository', '管理者用: 自分のGitHubリポジトリで準備')}</summary><div id="cloudAdmin"></div></details></div>`;
+    relayLeft($('#ccLeft', box));
+    const d = $('details', box);
+    d.addEventListener('toggle', () => { if (d.open && !$('#cOwner', box)) cloudPcAdmin($('#cloudAdmin', box), st); });
+    return;
+  }
+  cloudPcAdmin(box, st);
+}
+async function cloudPcAdmin(box, st) {
+  const api = Native();
   const link = (url, text) => `<a href="#" data-link="${url}">${text}</a>`;
   box.innerHTML = `<div class="pl-box">
+    ${CloudOmr.relay() ? `<div class="small" style="margin-bottom:6px">${LG('회원 계정으로 연결됨', 'Connected with your account', '会員アカウントで接続済み')} ✓ <span class="muted">${LG('(회원은 아래 연결 코드 없이 자동으로 써요)', '(members use it automatically, no link code)', '(会員はリンクコードなしで自動利用)')}</span></div>` : ''}
     <h3 style="margin:0 0 4px">☁ ${LG('밖에서 자동 인식 (클라우드 · PC가 꺼져 있어도)', 'Recognize outside (cloud · even with the PC off)', '外で自動認識 (クラウド · PCが消えていても)')}</h3>
     <p class="muted small" style="margin:0 0 6px">${LG('휴대폰이 PDF를 <b>내 비공개 GitHub 저장소</b>에 올리면, GitHub 무료 서버가 이 PC와 같은 Audiveris로 인식해서 결과를 돌려줘요. 휴대폰 데이터만 있으면 어디서나 돼요 (한 번에 1~3분 · 비공개 저장소는 한 달 2,000분 무료 → 수백 번). <b>처음 한 번만</b> 준비해요.', 'The phone uploads the PDF to <b>your private GitHub repository</b>, a free GitHub server recognizes it with the same Audiveris as this PC, and sends the result back. Works anywhere with mobile data (1–3 min each · private repos get 2,000 free minutes a month → hundreds of scores). Set up <b>once</b>.', 'スマホがPDFを<b>自分の非公開GitHubリポジトリ</b>に上げると、GitHubの無料サーバーがこのPCと同じAudiverisで認識して結果を返します。モバイルデータだけでどこでも使えます (1回1〜3分 · 非公開リポジトリは月2,000分無料 → 数百回)。<b>最初に一度だけ</b>準備します。')}</p>
     <ol class="pub-steps small">
@@ -3365,8 +3523,9 @@ function keyHarm(e) {
   if (k === 'Enter') { e.preventDefault(); return harmNav(e.shiftKey ? -1 : 1, e.ctrlKey); }
   if (k === 'Delete' || k === 'Backspace') { e.preventDefault(); return harmDelete(); }
   if (k === 'Insert') { e.preventDefault(); return harmAddTone(); }
-  // 그 밖의 음표 단축키(쉼표, 셋잇단 등)는 멜로디를 바꾸니까 막아요
-  if (/^[0tTnNsS+]$/.test(k) || code === 'CapsLock') { e.preventDefault(); toast('화음 탭에서는 멜로디가 잠겨 있어요 · Esc 로 끝낸 다음 고쳐요'); }
+  if (digit === '0') { e.preventDefault(); return harmRest(); }
+  // 그 밖의 음표 단축키(셋잇단 등)는 멜로디를 바꾸니까 막아요
+  if (/^[tTnNsS+]$/.test(k) || code === 'CapsLock') { e.preventDefault(); toast('화음 탭에서는 멜로디가 잠겨 있어요 · Esc 로 끝낸 다음 고쳐요'); }
 }
 function keyNote(e) {
   const k = e.key, code = e.code || '';
@@ -3447,6 +3606,8 @@ function onAction(act, btn, e) {
     case 'tri': return toggleTri();
     case 'chordMode': return setMode('harm');
     case 'harmDone': return leaveHarm();
+    case 'harmRest': return harmRest();
+    case 'grace': return toggleGrace();
     case 'text': return editText();
     case 'fillAll': return fillRests(false);
     case 'fillWorked': return fillRests(true);
