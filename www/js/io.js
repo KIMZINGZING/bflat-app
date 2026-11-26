@@ -157,8 +157,8 @@ function exportMusicXML(s) {
           if (arts.length) nots.push(`<articulations>${arts.join('')}</articulations>`);
           if ((n.art || []).includes('fermata')) nots.push('<fermata/>');
           if (nots.length) x += `<notations>${nots.join('')}</notations>`;
-          if (si === 0 && !n.rest && n.p && !tied.into.has(n.id)) {
-            for (let v = 0; v < s.lyricLines; v++) {
+          if (si === 0 && lyrSlot(n, tied.into)) {         // 쉼표도 가사 한 자리 (쉼표 글자는 내보내지 않아요)
+            if (!n.rest) for (let v = 0; v < s.lyricLines; v++) {
               const sy = syls[v][sylIdx];
               if (sy && sy !== '_') x += `<lyric number="${v + 1}"><syllabic>single</syllabic><text>${esc(sy)}</text></lyric>`;
             }
@@ -443,20 +443,21 @@ function importMusicXML(text) {
       if ((it.tx || '').trim()) s.slurs = s.slurs.filter(x => !(x.type === 'tie' && x.b === n.id));
     }));
     const sylNoteIdx = [];
-    m.notes.forEach((n, ni) => { if (!n.rest && n.p && !s.slurs.some(x => x.type === 'tie' && x.b === n.id)) sylNoteIdx.push(ni); });
+    m.notes.forEach((n, ni) => { if (n.rest || (n.p && !s.slurs.some(x => x.type === 'tie' && x.b === n.id))) sylNoteIdx.push(ni); });   // 쉼표도 가사 한 자리
     Object.keys(st.sylls).forEach(v => {
       let str = '', pos = 0;
       st.sylls[v].forEach(it => {
         const k = sylNoteIdx.indexOf(it.idx);
-        if (k < 0 || k < pos) return;          // 쉼표 등에 붙은 글자는 건너뛰어요 (뒤 가사가 밀리지 않게)
-        while (pos < k) { str += '_ '; pos++; }
+        if (k < 0 || k < pos || m.notes[it.idx].rest) return;          // 쉼표에 붙은 글자는 건너뛰어요 (뒤 가사가 밀리지 않게)
+        // 건너뛴 자리: 음표 = '_' · 쉼표 = 빈 음절 (띄어쓰기 한 칸 더)
+        while (pos < k) { str += m.notes[sylNoteIdx[pos]].rest ? (/\S$/.test(str) || !str ? '  ' : ' ') : '_ '; pos++; }
         let tok = it.tx;
         if (!(tok.length === 1 && KR.test(tok))) tok = (KR.test(tok) && tok.length > 1) ? `[${tok}]` : tok;
         if (!KR.test(tok) && !tok.startsWith('[')) tok = tok + ((it.syl === 'begin' || it.syl === 'middle') ? '-' : ' ');
         str += tok;
         pos = k + 1;
       });
-      m.lyrics[v] = str.trim();
+      m.lyrics[v] = str.trimEnd();    // 앞 띄어쓰기 = 맨 앞 쉼표 자리라서 남겨요
     });
     delete m._pendingText; delete m._pendingDyn;
     s.measures.push(m);
