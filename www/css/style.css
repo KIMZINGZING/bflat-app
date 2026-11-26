@@ -348,6 +348,15 @@ body.blank .modal-btns .grow { flex: 1; }
 /* 패드가 보일 때는 악보 맨 아래도 패드 위로 올려 볼 수 있게 아래 여백을 더 줘요 */
 body.touch.pad-on #scroller { padding-bottom: 170px; }
 body.touch .btn, body.touch .chip, body.touch .pop-item { min-height: 36px; }
+/* 이음줄·붙임줄을 누르면 아래에 뜨는 막대 (지우기 / 옮기기 ◀▶) — 패드는 잠깐 숨겨요 */
+.slur-bar { position: fixed; left: 0; right: 0; margin: 0 auto; width: fit-content; bottom: 44px; z-index: 45; display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 8px; max-width: calc(100vw - 16px); box-sizing: border-box; padding: 8px 10px; border-radius: 14px; background: var(--bar); border: 1px solid var(--line); box-shadow: 0 4px 16px rgba(0,0,0,.3); }
+.slur-bar[hidden] { display: none; }
+.slur-bar .btn { min-height: 44px; min-width: 44px; font-size: 16px; touch-action: manipulation; }
+.slur-bar .sb-title { width: 100%; text-align: center; font-size: 13px; font-weight: 600; color: var(--ink); }
+.slur-bar .sb-grp { display: inline-flex; align-items: center; gap: 4px; padding: 2px 4px; border-radius: 10px; border: 1px solid var(--line2); }
+.slur-bar .sb-grp b { font-size: 13px; min-width: 34px; text-align: center; }
+body.slurbar-on #touchPad, body.slurbar-on #touchPadShow { display: none; }
+body.slurbar-on #scroller { padding-bottom: 190px; }
 @media (max-width: 760px) {
   #topbar { flex-wrap: wrap; row-gap: 6px; gap: 3px; padding: 6px; }
   #topbar > .grow { display: none; }
