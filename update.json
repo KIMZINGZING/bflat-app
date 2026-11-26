@@ -1,6 +1,6 @@
 {
- "version": "b9f59fba1432",
- "built": "2026-11-27 00:41",
+ "version": "770cbbbd97bc",
+ "built": "2026-11-27 01:37",
  "files": {
   "assets/apple-touch-icon.png": {
    "sha256": "e9aca0c2fe30a5f6300661decbd1d578c00c7c0cead84b40374e696224d6712f",
@@ -27,8 +27,8 @@
    "size": 1379
   },
   "css/style.css": {
-   "sha256": "498c6b8d7b6e57d606a721b5dda6c098ccb0eb4d6199297e678fdb577af84580",
-   "size": 31191
+   "sha256": "7603708a1a7ee8600a7870c7fccda061b6eec7ec412cc645485ad4cc69f2d08b",
+   "size": 32307
   },
   "fonts/Griun_Yeeun-Rg.ttf": {
    "sha256": "866cfc5bfb52eacf4e39059524d719775895856eb94f170bcc4f4c89b2ae1aaa",
@@ -39,8 +39,8 @@
    "size": 5267
   },
   "js/app.js": {
-   "sha256": "1c68891cfa0f30132e1386998f2ba7be8f2f6c96a24a91ce2cae2d74e5595663",
-   "size": 305258
+   "sha256": "aa5ffc5132e0e21ac3519eae3b1e3bd19e400e64c07820d9d89b5fd56c55c4bb",
+   "size": 319803
   },
   "js/audio.js": {
    "sha256": "7f0a57499869b7346c64b032bb935bd12f89af96c1ad27a179c3e91cdedf58f4",
@@ -59,20 +59,20 @@
    "size": 16393
   },
   "js/i18n.js": {
-   "sha256": "94ac0bbf5e0ef7bfc4126b23a8356bf5c9a988e26afe19ac2f3ef9c06f2dd3d8",
-   "size": 83700
+   "sha256": "dc00da83b3b7349a6878518d92ce156a3a6e269127827aaf45f013f405a6c104",
+   "size": 84355
   },
   "js/io.js": {
-   "sha256": "b0ac5e751db78fc64a6d1bb40a1eef53a1a55a27c57e001198e5318713682193",
-   "size": 103422
+   "sha256": "2546c559d2dd5f5bfba950aad2ab8f90b9090ed249d047d0aa8a962ce36b13ff",
+   "size": 103785
   },
   "js/model.js": {
-   "sha256": "041ae1a15a37642d069fc6968171a5a92a7a50aeda6cb81afeae1a7a49a90827",
-   "size": 24069
+   "sha256": "99616134314dd37f2de265fc4f0e9b999f6993a738b9b860adaf8a5fb8911a5c",
+   "size": 25623
   },
   "js/render.js": {
-   "sha256": "77120d83754dd49bb02bd650dca7909029aa7118218b1096e600102987596917",
-   "size": 75898
+   "sha256": "d86e8f07afa994cf2efea24b6c762afa025540232157dbaaa39a80083e87f4d8",
+   "size": 76562
   },
   "js/vendor/pdf.min.js": {
    "sha256": "5b5799e6f8c680663207ac5b42ee14eed2a406fa7af48f50c154f0c0b1566946",
