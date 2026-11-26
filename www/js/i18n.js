@@ -430,6 +430,7 @@ const I18N_DICT = {
   '음표·코드도 옮기기 (다음 조 바뀜 전까지)': ['Move notes and chords too (until the next key change)', '音符・コードも移す (次の転調まで)'],
   '음표를 끌어 다른 음표에 놓기': ['Drag a note onto another note', '音符をドラッグして別の音符に置く'],
   '음표를 끌어 다른 음표에 놓으면 이음줄. 줄을 클릭하고 T를 누르면 붙임줄로.': ['Drag a note onto another note for a slur. Click the curve and press T to make it a tie.', '音符をドラッグして別の音符に置くとスラー。線をクリックしてTを押すとタイに。'],
+  '음표를 누른 채 다른 음표로 끌어 놓기 = 이음줄 · 줄을 누른 채 끌기 = 옮기기 (끝 ○ = 한쪽만 · 다른 마디로도) · 우클릭·Delete = 지우기 · ←→ = 한 음씩 · T = 붙임줄 ↔ 이음줄': ['Drag from one note to another = slur · drag a curve = move it (end ○ = one end · across measures too) · right-click / Delete = delete · ←→ = one note · T = tie ↔ slur', '音符を押したまま別の音符へドラッグ = スラー · 線をドラッグ = 移動 (端の○ = 片側 · 別の小節へも) · 右クリック・Delete = 削除 · ←→ = 1音ずつ · T = タイ ↔ スラー'],
   '음표를 누른 채 다른 음표로 끌어 놓기 = 이음줄 · 줄을 클릭해 고르고': ['Drag from one note to another = slur · click a curve, then', '音符を押したまま別の音符へドラッグ = スラー · 線をクリックして選び'],
   '이 PDF에서 악보를 읽지 못했어요. 스캔이 흐리거나 손글씨면 잘 안 될 수 있어요.': ['Could not read a score from this PDF. Blurry scans or handwriting may not work.', 'このPDFから楽譜を読み取れませんでした。スキャンがぼやけていたり手書きだとうまくいかないことがあります。'],
   '이 마디 빈칸만': ['This measure only', 'この小節の空きだけ'],
