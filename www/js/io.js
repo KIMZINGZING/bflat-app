@@ -138,8 +138,13 @@ function exportMusicXML(s) {
             if (n.dots) y += '<dot/>';
             if (p && p.a) y += `<accidental>${p.a > 0 ? 'sharp' : 'flat'}</accidental>`;
             if (n.tri) y += '<time-modification><actual-notes>3</actual-notes><normal-notes>2</normal-notes></time-modification>';
+            if (p && isClap(n)) y += '<notehead>x</notehead>';
             return y + staffTag;
           };
+          // 꾸밈음: 원래 음표 앞에 <grace/> (길이 없음)
+          if (!n.rest && n.p && n.gr) n.gr.forEach(p => {
+            x += `<note><grace${n.gr.length === 1 ? ' slash="yes"' : ''}/>${pitchXml(p)}<voice>${voice}</voice><type>${n.gr.length === 1 ? 'eighth' : '16th'}</type>${p.a ? `<accidental>${p.a > 0 ? 'sharp' : 'flat'}</accidental>` : ''}${staffTag}</note>`;
+          });
           x += '<note>';
           if (n.rest || !n.p) x += (n.full ? '<rest measure="yes"/>' : '<rest/>') + common(null);
           else x += pitchXml(n.p) + common(n.p);
@@ -148,7 +153,7 @@ function exportMusicXML(s) {
           if (tied.from.has(n.id)) nots.push('<tied type="start"/>');
           (slurStop.get(n.id) || []).forEach(q2 => nots.push(`<slur type="stop" number="${q2}"/>`));
           (slurStart.get(n.id) || []).forEach(q2 => nots.push(`<slur type="start" number="${q2}"/>`));
-          const arts = (n.art || []).filter(a => a !== 'fermata').map(a => ({ accent: '<accent/>', staccato: '<staccato/>', tenuto: '<tenuto/>', marcato: '<strong-accent/>' }[a]));
+          const arts = artMarks(n).filter(a => a !== 'fermata').map(a => ({ accent: '<accent/>', staccato: '<staccato/>', tenuto: '<tenuto/>', marcato: '<strong-accent/>' }[a]));
           if (arts.length) nots.push(`<articulations>${arts.join('')}</articulations>`);
           if ((n.art || []).includes('fermata')) nots.push('<fermata/>');
           if (nots.length) x += `<notations>${nots.join('')}</notations>`;
@@ -166,7 +171,7 @@ function exportMusicXML(s) {
         });
         while (ci < chords.length) { x += chordXml(chords[ci].name, 0); ci++; }
         // 둘째 성부 (길이가 다른 화음 음) → voice+1
-        const ovs = OVr(m, si).filter(n => !n.rest && n.p).slice().sort((a, b) => (a.t || 0) - (b.t || 0));
+        const ovs = OVr(m, si).slice().sort((a, b) => (a.t || 0) - (b.t || 0));
         // 겹치는 음은 성부를 하나씩 더 나눠서 (voice+1, voice+2 …)
         const lanes = [];
         ovs.forEach(n => { const nt = n.t || 0; let ln = lanes.find(l => l.cur <= nt); if (!ln) { ln = { cur: 0, notes: [] }; lanes.push(ln); } ln.notes.push(n); ln.cur = nt + noteTicks(n, c.cap); });
@@ -177,7 +182,8 @@ function exportMusicXML(s) {
           ln.notes.forEach(n => {
             const d = noteTicks(n, c.cap), nt = n.t || 0;
             if (nt > cur) x += `<forward><duration>${nt - cur}</duration><voice>${vv}</voice>${staffTag}</forward>`;
-            const tail = p => `<duration>${d}</duration><voice>${vv}</voice><type>${XML_TYPE[n.dur]}</type>${n.dots ? '<dot/>' : ''}${p.a ? `<accidental>${p.a > 0 ? 'sharp' : 'flat'}</accidental>` : ''}${staffTag}`;
+            const tail = p => `<duration>${d}</duration><voice>${vv}</voice><type>${XML_TYPE[n.dur]}</type>${n.dots ? '<dot/>' : ''}${p && p.a ? `<accidental>${p.a > 0 ? 'sharp' : 'flat'}</accidental>` : ''}${staffTag}`;
+            if (n.rest || !n.p) { x += '<note><rest/>' + tail(null) + '</note>'; cur = nt + d; return; }
             x += '<note>' + pitchXml(n.p) + tail(n.p) + '</note>';
             (n.ps || []).forEach(p => { x += '<note><chord/>' + pitchXml(p) + tail(p) + '</note>'; });
             cur = nt + d;
@@ -292,10 +298,14 @@ function importMusicXML(text) {
     const voice = txt(el, 'voice', '1');
     const isChord = !!q(el, 'chord');
     const durT = Math.round(+txt(el, 'duration', 0) * TPQ / div);
-    if (q(el, 'grace')) return 0;
-    if (st.voice[si] === undefined) st.voice[si] = voice;
     const p = q(el, 'pitch');
     const pitch = p ? { d: +txt(p, 'octave', 4) * 7 + STEPS.indexOf(txt(p, 'step', 'C')), a: Math.round(+txt(p, 'alter', 0)) } : null;
+    // 꾸밈음: 길이 없음 → 모아 뒀다가 같은 줄·같은 성부의 다음 음표에 붙여요 (꾸밈음 화음은 맨 아래 음 하나만)
+    if (q(el, 'grace')) {
+      if (pitch && !isChord && (st.voice[si] === undefined || voice === st.voice[si])) (st.grace[si] = st.grace[si] || []).push(pitch);
+      return 0;
+    }
+    if (st.voice[si] === undefined) st.voice[si] = voice;
     if (voice !== st.voice[si]) {
       // 다른 성부 → 길이가 다른 화음 음 (쉼표는 빼요)
       if (!pitch || q(el, 'rest')) return isChord ? 0 : durT;
@@ -331,7 +341,11 @@ function importMusicXML(text) {
     });
     const arts = [];
     if (q(el, 'accent')) arts.push('accent'); if (q(el, 'staccato')) arts.push('staccato'); if (q(el, 'tenuto')) arts.push('tenuto'); if (q(el, 'strong-accent')) arts.push('marcato'); if (q(el, 'fermata')) arts.push('fermata');
+    // X 머리 (박자치기 · 말하듯)
+    if (/^(x|cross|circle-x)$/.test(txt(el, 'notehead', '').trim()) && !n.rest) arts.push('x');
     n.art = arts;
+    // (사이에 쉼표가 끼면 다음 음표까지 기다려요 · 인식 고치기가 쉼표를 꾸밈음 뒤에 넣는 일이 있어요)
+    if (st.grace[si] && st.grace[si].length && n.p && !n.rest) { n.gr = st.grace[si]; st.grace[si] = []; }
     if (si === 0) el.querySelectorAll('lyric').forEach(ly => {
       const v = (parseInt(ly.getAttribute('number')) || 1) - 1;
       if (v > 5) return;
@@ -370,7 +384,7 @@ function importMusicXML(text) {
     if (idx > 0 && pr && (pr.getAttribute('new-system') === 'yes' || pr.getAttribute('new-page') === 'yes')) { s.lines.push(lineCount); lineCount = 0; }
     lineCount++;
     if (me.getAttribute('implicit') === 'yes' && idx === 0) m.pickup = true;
-    const st = { voice: mainVoices(me, 0), last: {}, sylls: {} };
+    const st = { voice: mainVoices(me, 0), last: {}, sylls: {}, grace: {} };
     let t = 0;
     [...me.children].forEach(el => {
       const tag = el.tagName;
@@ -453,7 +467,7 @@ function importMusicXML(text) {
     let pdiv = 1;
     [...pt.querySelectorAll(':scope > measure')].forEach((me, idx) => {
       const m = s.measures[idx]; if (!m) return;
-      const st = { voice: mainVoices(me, pi), last: {}, sylls: {} };
+      const st = { voice: mainVoices(me, pi), last: {}, sylls: {}, grace: {} };
       let pt2 = 0;
       [...me.children].forEach(el => {
         if (el.tagName === 'attributes') pdiv = +txt(el, 'divisions', pdiv);
@@ -1509,7 +1523,11 @@ function exportMidi(s, settings) {
   const tempo = s.tempo || 90;
   const secToTick = sec => Math.round(sec * tempo / 60 * DIV);
   const evs = [];
-  perf.ev.forEach(e => { evs.push({ t: secToTick(e.time), d: [0x90, e.midi, Math.round(e.vel * 110) + 10] }); evs.push({ t: secToTick(e.time + e.dur), d: [0x80, e.midi, 0], off: 1 }); });
+  // 박자치기 = 타악기 채널(10번)의 손뼉(39) · 시작 전으로 당긴 꾸밈음은 0 에서
+  perf.ev.forEach(e => {
+    const on = e.perc ? 0x99 : 0x90, off = e.perc ? 0x89 : 0x80, md = e.perc ? 39 : e.midi, t0 = Math.max(0, e.time);
+    evs.push({ t: secToTick(t0), d: [on, md, Math.round(e.vel * 110) + 10] }); evs.push({ t: secToTick(t0 + e.dur), d: [off, md, 0], off: 1 });
+  });
   if (settings.chordAccomp) perf.chords.forEach(c => {
     [c.tones.bass, ...c.tones.tones].forEach(m => { evs.push({ t: secToTick(c.time), d: [0x91, m, 60] }); evs.push({ t: secToTick(c.time + c.dur * .97), d: [0x81, m, 0], off: 1 }); });
   });
