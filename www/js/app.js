@@ -2321,23 +2321,40 @@ const Lib = {
   async save(s, id) {
     const gz = await gzipText(JSON.stringify(s));
     const meta = { name: s.title || LG('제목 없음', 'Untitled', '無題'), measures: s.measures.length };
+    const r = await this.saveRaw(meta, gz, id);
+    if (r && !r.error && typeof Cloud !== 'undefined') Cloud.soon();      // 계정의 다른 기기로 (내 악보함 연동)
+    return r;
+  },
+  /** 줄인 악보(gzip 바이트) 그대로 저장 · meta.updated / meta.owner 를 주면 그대로 (다른 기기에서 받은 악보) */
+  async saveRaw(meta, gz, id) {
+    meta = Object.assign({}, meta);
+    if (meta.owner === undefined && typeof Cloud !== 'undefined') meta.owner = Cloud.uid() || '';
     const api = this.native(); if (api) return await api.lib_save(meta, bytesToB64(gz), id || null);
     const cur = await this.list();
     const old = id ? cur.items.find(it => it.id === id) : null;
     if (cur.used - (old ? old.size : 0) + gz.length > LIB_LIMIT) return { error: 'full', used: cur.used, limit: LIB_LIMIT };
-    const it = { id: old ? old.id : Math.random().toString(16).slice(2, 14), name: meta.name, measures: meta.measures, updated: Date.now(), size: gz.length, data: gz };
+    // 바꾼 시각은 늘 앞으로만 (기기 시계가 뒤로 가도 "바뀜"이 사라지지 않게)
+    const it = { id: old ? old.id : (id && /^[\w-]{1,40}$/.test(id) ? id : Math.random().toString(16).slice(2, 14)), name: meta.name, measures: meta.measures, updated: meta.updated || Math.max(Date.now(), old ? old.updated + 1 : 0), size: gz.length, owner: meta.owner || '', data: gz };
     await this.idb('readwrite', st => st.put(it));
     const { data, ...m } = it; return m;
   },
-  async load(id) {
+  async loadRaw(id) {
     const api = this.native();
-    const bytes = api ? b64ToBytes(await api.lib_load(id)) : (await this.idb('readonly', st => st.get(id))).data;
-    return JSON.parse(await gunzipBytes(bytes));
+    if (api) { const b = await api.lib_load(id); return b ? b64ToBytes(b) : null; }
+    const it = await this.idb('readonly', st => st.get(id)); return it ? it.data : null;
   },
-  async del(id) { const api = this.native(); if (api) return api.lib_delete(id); return this.idb('readwrite', st => st.delete(id)); },
+  async load(id) { return JSON.parse(await gunzipBytes(await this.loadRaw(id))); },
+  /** sync = 다른 기기에서 지워진 것을 따라 지울 때 (다시 알리지 않아요) */
+  async del(id, sync) {
+    const api = this.native();
+    if (api) await api.lib_delete(id); else await this.idb('readwrite', st => st.delete(id));
+    if (!sync && typeof Cloud !== 'undefined') { Cloud.markDeleted(id); Cloud.soon(); }
+  },
   async rename(id, name) {
-    const api = this.native(); if (api) return api.lib_rename(id, name);
-    const it = await this.idb('readonly', st => st.get(id)); if (!it) return; it.name = name; return this.idb('readwrite', st => st.put(it));
+    const api = this.native();
+    if (api) await api.lib_rename(id, name);
+    else { const it = await this.idb('readonly', st => st.get(id)); if (!it) return; it.name = name; it.updated = Math.max(Date.now(), (it.updated || 0) + 1); await this.idb('readwrite', st => st.put(it)); }
+    if (typeof Cloud !== 'undefined') Cloud.soon();
   },
 };
 const fmtSize = b => b < 1024 ? b + ' B' : b < 1048576 ? (b / 1024).toFixed(1) + ' KB' : (b / 1048576).toFixed(1) + ' MB';
@@ -2351,18 +2368,20 @@ async function libSave(asNew) {
     toast(LG(`내 악보함에 저장했어요 — ${r.name} (${fmtSize(r.size)})`, `Saved to My scores — ${r.name} (${fmtSize(r.size)})`, `マイ楽譜に保存しました — ${r.name} (${fmtSize(r.size)})`));
   } catch (e) { console.error(e); toast(LG('저장하지 못했어요: ', 'Could not save: ', '保存できませんでした: ') + e.message, 4000); }
 }
-async function libraryDialog() {
+/** fromSync = 다른 기기와 맞춘 뒤 다시 그리기 (또 맞추지 않아요) */
+async function libraryDialog(fromSync) {
   let data;
   try { data = await Lib.list(); } catch (e) { console.error(e); toast(LG('내 악보함을 열 수 없어요', 'Cannot open My scores', 'マイ楽譜を開けません')); return; }
   const pct = Math.min(100, data.used / data.limit * 100);
   const when = ms => new Date(ms).toLocaleString(I18N.lang === 'ko' ? 'ko-KR' : I18N.lang === 'ja' ? 'ja-JP' : 'en-US', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
   modal(`<h2>내 악보함</h2>
   <div class="lib-usage"><div class="lib-bar"><i style="width:${pct.toFixed(1)}%"></i></div><span data-notr>${fmtSize(data.used)} / ${fmtSize(data.limit)}</span></div>
+  ${typeof Cloud !== 'undefined' ? `<div class="lib-cloud small muted">${Cloud.statusHtml()}</div>` : ''}
   <div class="lib-actions">${App.blank ? '' : `<button class="btn primary" id="lSave">${App.libId ? '지금 악보 저장 (덮어쓰기)' : '지금 악보 저장'}</button>${App.libId ? '<button class="btn" id="lSaveNew">새로 하나 더 저장</button>' : ''}`}</div>
   <div class="lib-list">${data.items.length ? data.items.map(it => `<div class="lib-item${it.id === App.libId ? ' cur' : ''}" data-id="${esc(it.id)}">
-      <div class="lib-main"><b data-notr>${esc(it.name)}</b><span class="muted small" data-notr>${esc(when(it.updated))} · ${LG(`${it.measures}마디`, `${it.measures} measures`, `${it.measures}小節`)} · ${fmtSize(it.size)}</span></div>
+      <div class="lib-main"><b data-notr>${esc(it.name)}</b><span class="muted small" data-notr>${esc(when(it.updated))} · ${LG(`${it.measures}마디`, `${it.measures} measures`, `${it.measures}小節`)} · ${fmtSize(it.size)}${typeof Cloud !== 'undefined' && it.owner && Cloud.uid() && it.owner !== Cloud.uid() ? ' · ' + LG('다른 계정에서 저장 (연동 안 함)', 'saved by another account (not synced)', '別のアカウントで保存 (同期しない)') : ''}</span></div>
       <button class="btn" data-lopen>열기</button><button class="btn icon" data-lren title="이름 바꾸기">✎</button><button class="btn icon" data-ldel title="지우기">🗑</button></div>`).join('') : '<p class="muted">아직 저장한 악보가 없어요. 악보를 만든 다음 "지금 악보 저장"을 눌러요.</p>'}</div>
-  <p class="muted small">악보는 작게 줄여서 보관해요 (악보 하나 보통 수십 KB · 전체 200MB까지).${Lib.native() ? '' : ' 브라우저에서는 이 브라우저에만 저장돼요.'}</p>
+  <p class="muted small">악보는 작게 줄여서 보관해요 (악보 하나 보통 수십 KB · 전체 200MB까지).${typeof Cloud !== 'undefined' && Cloud.enabled() ? ' 같은 계정으로 로그인한 PC·휴대폰·태블릿과 똑같이 맞춰져요.' : Lib.native() ? '' : ' 브라우저에서는 이 브라우저에만 저장돼요.'}</p>
   <div class="modal-btns"><span class="grow"></span><button class="btn primary" data-close>닫기</button></div>`, md => {
     const s1 = $('#lSave', md), s2 = $('#lSaveNew', md);
     if (s1) s1.addEventListener('click', async () => { await libSave(false); libraryDialog(); });
@@ -2387,6 +2406,8 @@ async function libraryDialog() {
       });
     });
   }, 'lib-modal');
+  // 열 때마다 계정의 다른 기기와 맞춰요 (바뀐 게 있으면 목록을 다시 그려요)
+  if (!fromSync && typeof Cloud !== 'undefined') Cloud.sync();
 }
 /* ---------- 계이름 (악보 잘 못 보는 학생용) ---------- */
 function solfaDialog() {
@@ -3969,6 +3990,7 @@ function init() {
   render();
   // 첫 화면: (처음이면 회원 가입·로그인 → ) 백지 + 새 악보 창 (지난 작업은 "이전 작업 이어서"로)
   if (typeof Auth !== 'undefined') Auth.gate(() => scoreTypeDialog(true)); else scoreTypeDialog(true);
+  if (typeof Cloud !== 'undefined') Cloud.start();      // 내 악보함 계정 연동 (로그인돼 있을 때만)
   // 글꼴이 늦게 로드되면 다시 그리기
   if (document.fonts) document.fonts.ready.then(() => render());
 }
