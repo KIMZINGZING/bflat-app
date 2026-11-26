@@ -1,6 +1,6 @@
 {
- "version": "288b87c2048f",
- "built": "2026-11-27 02:42",
+ "version": "64de8434b132",
+ "built": "2026-11-27 02:52",
  "files": {
   "assets/apple-touch-icon.png": {
    "sha256": "e9aca0c2fe30a5f6300661decbd1d578c00c7c0cead84b40374e696224d6712f",
@@ -39,8 +39,8 @@
    "size": 5303
   },
   "js/app.js": {
-   "sha256": "53a30d411f5f32290fa6d239c68be5970a259f6aa0f71f6f60f9234ef6562b62",
-   "size": 321849
+   "sha256": "de7078ca0a9596db124d64e69f8a86143296263d525b620fe198bc9c9946bd7f",
+   "size": 322011
   },
   "js/audio.js": {
    "sha256": "7f0a57499869b7346c64b032bb935bd12f89af96c1ad27a179c3e91cdedf58f4",
