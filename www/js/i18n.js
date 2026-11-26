@@ -640,6 +640,7 @@ const I18N_DICT = {
   '열기': ['Open', '開く'],
   '이름 바꾸기': ['Rename', '名前を変更'],
   '아직 저장한 악보가 없어요. 악보를 만든 다음 "지금 악보 저장"을 눌러요.': ['No saved scores yet. Create a score, then press "Save current score".', 'まだ保存した楽譜がありません。楽譜を作ってから「今の楽譜を保存」を押してください。'],
+  ' 같은 계정으로 로그인한 PC·휴대폰·태블릿과 똑같이 맞춰져요.': [' It stays in sync with your PC, phone and tablet logged in with the same account.', ' 同じアカウントでログインしたPC・スマホ・タブレットと同期されます。'],
   '악보는 작게 줄여서 보관해요 (악보 하나 보통 수십 KB · 전체 200MB까지).': ['Scores are stored compressed (usually tens of KB each · up to 200 MB in total).', '楽譜は圧縮して保管します (1曲ふつう数十KB · 全体で200MBまで)。'],
   '브라우저에서는 이 브라우저에만 저장돼요.': ['In a browser they are saved only in this browser.', 'ブラウザではこのブラウザにだけ保存されます。'],
   '언어': ['Language', '言語'],
