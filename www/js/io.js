@@ -157,7 +157,7 @@ function exportMusicXML(s) {
           if (arts.length) nots.push(`<articulations>${arts.join('')}</articulations>`);
           if ((n.art || []).includes('fermata')) nots.push('<fermata/>');
           if (nots.length) x += `<notations>${nots.join('')}</notations>`;
-          if (si === 0 && lyrSlot(n, tied.into)) {         // 쉼표도 가사 한 자리 (쉼표 글자는 내보내지 않아요)
+          if (si === 0 && lyrSlot(n, tied.noSyl)) {         // 쉼표도 가사 한 자리 (쉼표 글자는 내보내지 않아요)
             if (!n.rest) for (let v = 0; v < s.lyricLines; v++) {
               const sy = syls[v][sylIdx];
               if (sy && sy !== '_') x += `<lyric number="${v + 1}"><syllabic>single</syllabic><text>${esc(sy)}</text></lyric>`;
@@ -483,6 +483,7 @@ function importMusicXML(text) {
   if (lineCount) s.lines.push(lineCount);
   if (s.lines.length === 1 && s.lines[0] > 6) { const n = s.lines[0]; s.lines = []; for (let k = 0; k < n; k += 4) s.lines.push(Math.min(4, n - k)); }
   s.lyricLines = Math.min(6, maxVerse);
+  s.lyrSlur = false; s._fromXml = true;   // 이음줄 안 음의 빈 가사 자리 정리 (fixIds)
   if (!gotTempo) s.tempo = null;          // 파일에 빠르기가 없으면 "♩=90"을 지어내지 않아요 (재생은 90으로)
   return fixIds(s);
 }
