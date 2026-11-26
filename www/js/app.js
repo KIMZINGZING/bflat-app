@@ -2350,10 +2350,12 @@ const Lib = {
     if (api) await api.lib_delete(id); else await this.idb('readwrite', st => st.delete(id));
     if (!sync && typeof Cloud !== 'undefined') { Cloud.markDeleted(id); Cloud.soon(); }
   },
+  /** 이름 바꾸기 = 악보 제목도 같이 (다시 저장해도 옛 이름으로 돌아가지 않게 · 다른 기기로도 같이 가요) */
   async rename(id, name) {
-    const api = this.native();
-    if (api) await api.lib_rename(id, name);
-    else { const it = await this.idb('readonly', st => st.get(id)); if (!it) return; it.name = name; it.updated = Math.max(Date.now(), (it.updated || 0) + 1); await this.idb('readwrite', st => st.put(it)); }
+    const s = await this.load(id);
+    s.title = name;
+    await this.saveRaw({ name, measures: s.measures.length }, await gzipText(JSON.stringify(s)), id);
+    if (typeof App !== 'undefined' && App.libId === id && App.s) { App.s.title = name; if (Native()) Native().set_title(name); render(); }
     if (typeof Cloud !== 'undefined') Cloud.soon();
   },
 };
