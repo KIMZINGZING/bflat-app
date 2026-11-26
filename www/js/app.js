@@ -79,10 +79,12 @@ function removeSlursFor(ids) { const set = new Set(ids); S().slurs = S().slurs.f
 function render() {
   const s = App.s;
   App.ctxs = computeContexts(s);
-  App.lay = computeLayout(s, App.ctxs, {});
+  // 쉬는 마디 여러 개 = 한 마디에 숫자로 (마디 편집 모드에서는 하나하나 펼쳐서 고칠 수 있게)
+  const lopt = { noMr: App.mode === 'measure' };
+  App.lay = computeLayout(s, App.ctxs, lopt);
   // 한 줄에 다 안 들어가면(마디 여백을 줄여도 음표·가사·계이름이 겹치면) 그 줄을 나눠요
   //  (조옮김으로 ♭·♯ 계이름이 넓어졌을 때, 계이름을 켰을 때, 음표를 많이 넣었을 때)
-  if (!App.blank && App.lay.systems.some(sy => sy.overflow && sy.idxs.length > 1) && refitLines(s)) App.lay = computeLayout(s, App.ctxs, {});
+  if (!App.blank && App.lay.systems.some(sy => sy.overflow && sy.idxs.length > 1 && !sy.packed) && refitLines(s, lopt)) App.lay = computeLayout(s, App.ctxs, lopt);
   const st = { sel: App.sel, selMeasures: App.selMeasures, mode: App.mode, write: App.write, verse: App.verse, playStart: App.playStart, selSlur: App.selSlur, slurHandleR: isTouchUI() ? Math.max(6, 8 / App.zoom) : 4, selBar: App.selBar, widthEdit: App.widthEdit, chordEdit: App.chordEdit, hoverMeasure: App.hoverMeasure, scoreFont: App.settings.scoreFont, staff: curStaff(), head: App.head, hc: App.hc };
   const pages = App.blank ? [] : renderScore(s, App.ctxs, App.lay, st);
   const z = App.zoom;
@@ -174,7 +176,7 @@ function buildSubbar() {
     <button class="btn need-sel" id="bTri" data-act="tri" title="셋잇단 (T)">셋잇단</button>
     <button class="btn" id="bChord" data-act="chordMode" title="화음 탭으로 (H) — 멜로디는 잠그고 화음만 쌓아요">화음 쌓기 → H</button>
     <span class="sep"></span>
-    <div class="seg">${ARTS.map(([k, g, t]) => `<button class="btn need-sel art" data-art="${k}" title="${t}">${g}</button>`).join('')}<button class="btn need-sel art" id="bGrace" data-act="grace" title="꾸밈음 (앞꾸밈음) — 고른 음표 앞에 작은 음 · ↑↓ = 꾸밈음 높이">꾸밈음</button></div>
+    <div class="seg">${ARTS.map(([k, g, t]) => `<button class="btn need-sel art" data-art="${k}" title="${t}">${g}</button>`).join('')}<button class="btn art" id="bSlur" data-act="slurTool" title="이음줄 (S) — 고른 음표에 달기 · 악보의 이음줄을 누르면 여기서 고치기">${SLUR_ICON}</button><button class="btn need-sel art" id="bGrace" data-act="grace" title="꾸밈음 (앞꾸밈음) — 고른 음표 앞에 작은 음 · ↑↓ = 꾸밈음 높이">꾸밈음</button></div>
     <select id="selDyn" class="btn need-sel" title="셈여림"><option value="">셈여림</option>${DYNS.map(d => `<option value="${d}">${d}</option>`).join('')}<option value="-">지우기</option></select>
     <button class="btn need-sel" data-act="text" title="템포·표현 글자 (rit., Swing, ♩=100 …)">글자…</button>
     <span class="sep"></span>
@@ -1084,8 +1086,11 @@ function slurMenu(id, x, y) {
 function updateSlurBar() {
   let bar = $('#slurBar');
   const sl = App.selSlur && S().slurs.find(x => x.id === App.selSlur);
-  if (!sl || !isTouchUI() || App.blank) { if (bar) bar.hidden = true; document.body.classList.remove('slurbar-on'); App.slurEdit = sl ? App.slurEdit : false; return; }
-  document.body.classList.add('slurbar-on');
+  // 음표 탭: 악센트·스타카토 옆 이음줄 그림 버튼 아래에 작은 상자로 (컴퓨터·휴대폰·태블릿 모두)
+  const anchor = App.mode === 'note' ? $('#bSlur') : null;
+  if (anchor) anchor.classList.toggle('on', !!sl);
+  if (!sl || App.blank || (!anchor && !isTouchUI())) { if (bar) bar.hidden = true; document.body.classList.remove('slurbar-on'); App.slurEdit = sl ? App.slurEdit : false; return; }
+  document.body.classList.toggle('slurbar-on', !anchor);
   if (!bar) {
     bar = document.createElement('div'); bar.id = 'slurBar'; bar.className = 'slur-bar';
     document.body.appendChild(bar);
@@ -1120,6 +1125,27 @@ function updateSlurBar() {
          <button class="btn primary" data-sb="done">${LG('완료', 'Done', '完了')}</button>`;
   }
   bar.hidden = false;
+  bar.classList.toggle('anchored', !!anchor);
+  if (anchor) {
+    // 휴대폰에서 아래 막대를 옆으로 밀거나 화면 크기가 바뀌면 상자도 버튼을 따라가요
+    if (!updateSlurBar._hooked) { updateSlurBar._hooked = true; const sb = $('#subbar'); if (sb) sb.addEventListener('scroll', () => updateSlurBar(), { passive: true }); window.addEventListener('resize', () => updateSlurBar()); }
+    const r = anchor.getBoundingClientRect(), bw = bar.offsetWidth;
+    bar.style.top = Math.round(r.bottom + 6) + 'px';
+    bar.style.left = Math.round(Math.max(8, Math.min(innerWidth - bw - 8, r.left + r.width / 2 - 24))) + 'px';
+    bar.style.setProperty('--tip', Math.round(r.left + r.width / 2 - parseFloat(bar.style.left)) + 'px');
+  } else { bar.style.top = ''; bar.style.left = ''; }
+}
+/** 이음줄 그림 버튼: 음표를 골랐으면 이음줄 달기 · 이음줄을 골랐으면 고치기 상자 닫기 */
+const SLUR_ICON = '<svg class="slur-ico" width="24" height="14" viewBox="0 0 24 14" aria-hidden="true"><path d="M2 11 C6 1.5 18 1.5 22 11 C17.5 5 6.5 5 2 11Z" fill="currentColor"/><ellipse cx="3.2" cy="12" rx="2.2" ry="1.6" fill="currentColor" opacity=".55"/><ellipse cx="20.8" cy="12" rx="2.2" ry="1.6" fill="currentColor" opacity=".55"/></svg>';
+function slurTool() {
+  if (App.selSlur) { App.selSlur = null; App.slurEdit = false; render(); return; }
+  const ns = selNotes();
+  if (!ns.length) { toast(LG('음표를 고르고 누르면 이음줄을 달아요 (여러 개 고르면 처음~끝) · 악보의 이음줄을 누르면 여기서 고쳐요', 'Select notes, then tap to add a slur (first to last) · tap a slur in the score to edit it here', '音符を選んで押すとスラーを付けます (複数なら最初〜最後) · 楽譜のスラーを押すとここで編集')); return; }
+  const before = new Set(S().slurs.map(x => x.id));
+  addSlurNext('slur');
+  const made = S().slurs.find(x => !before.has(x.id));
+  if (made) { App.selSlur = made.id; App.sel = []; App.slurEdit = false; }
+  render();
 }
 /** 터치: 고른 이음줄을 손가락·펜으로 끌기 (화면이 밀리지 않게 막고 옮겨요) */
 function onSlurTouchStart(e) {
@@ -1754,7 +1780,7 @@ function openLyricEditor(mi) {
   const v = App.verse;
   const box = document.createElement('div');
   box.className = 'editor lyric-ed';
-  const notes = m.notes.filter(n => lyrSlot(n, App.lay.tied.into)).length;   // 쉼표도 한 자리
+  const notes = m.notes.filter(n => lyrSlot(n, App.lay.tied.noSyl)).length;   // 쉼표도 한 자리
   box.innerHTML = `<div class="ed-label">${mi + 1}마디 · ${v + 1}절 · 음표·쉼표 ${notes}개 <span class="cnt"></span></div><div class="ed-row"><input value="${esc(m.lyrics[v] || '')}" placeholder="가사 (예: 참 반 가 운)" spellcheck="false"><button class="ed-ok" tabindex="-1">${LG('입력', 'OK', '入力')}</button></div>`;
   // 다시 그려도(마우스가 다른 마디로 가도) 같은 자리에 그대로 · Enter 나 [입력]을 눌러야 닫혀요
   box._place = () => {
@@ -3931,6 +3957,7 @@ function onAction(act, btn, e) {
     case 'harmDone': return leaveHarm();
     case 'harmRest': return harmRest();
     case 'grace': return toggleGrace();
+    case 'slurTool': return slurTool();
     case 'text': return editText();
     case 'fillAll': return fillRests(false);
     case 'fillWorked': return fillRests(true);
