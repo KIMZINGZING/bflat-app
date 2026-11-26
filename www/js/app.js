@@ -86,7 +86,15 @@ function render() {
   const st = { sel: App.sel, selMeasures: App.selMeasures, mode: App.mode, write: App.write, verse: App.verse, playStart: App.playStart, selSlur: App.selSlur, slurHandleR: isTouchUI() ? Math.max(6, 8 / App.zoom) : 4, selBar: App.selBar, widthEdit: App.widthEdit, chordEdit: App.chordEdit, hoverMeasure: App.hoverMeasure, scoreFont: App.settings.scoreFont, staff: curStaff(), head: App.head, hc: App.hc };
   const pages = App.blank ? [] : renderScore(s, App.ctxs, App.lay, st);
   const z = App.zoom;
+  // 열려 있는 코드·가사 입력칸은 다시 그려도 그대로 (마우스가 다른 마디로 가도 쓰던 글이 안 사라져요)
+  const keep = $$('#pages .editor').map(el => { const i = el.querySelector('input'); return { el, focus: !!i && document.activeElement === i, a: i ? i.selectionStart : 0, b: i ? i.selectionEnd : 0 }; });
   $('#pages').innerHTML = pages.map(p => `<div class="page" data-page="${p.index}" style="width:${L.PW * z}px;height:${p.h * z}px"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${L.PW} ${f1(p.h)}" width="${L.PW * z}" height="${f1(p.h * z)}">${p.parts.join('')}</svg></div>`).join('');
+  keep.forEach(k => {
+    if (!k.el._place || !k.el._place()) { if (k.el._save) k.el._save(); return; }
+    const i = k.el.querySelector('input');
+    if (k.focus && i) { i.focus({ preventScroll: true }); try { i.setSelectionRange(k.a, k.b); } catch (_) { } }
+  });
+  if (!App.blank) drawCountButtons();
   document.body.dataset.mode = App.mode;
   document.body.classList.toggle('writing', App.write);
   updateStatus();
@@ -159,7 +167,7 @@ function buildSubbar() {
   const m = App.mode;
   let h = '';
   if (m === 'note') {
-    h = `<div class="hint">마디 클릭 / Caps Lock = 음표 개수 고르기 · 길이 = 3:16분음표 \`:8분음표 1:4분음표 2:2분음표 4:온음표 · ↑↓ = 음높이 · H = 화음 · Alt+↑↓ = 줄 바꾸기 · ←→/Enter = 다음 음표 · 빈 곳 끌기 = 여러 개 고르기 · 고른 음표 끌기 = 다른 마디로 · N = 쓰기 모드</div>
+    h = `<div class="hint">마디 오른쪽 위 ♩ 버튼 / Caps Lock = 음표 개수 고르기 · 길이 = 3:16분음표 \`:8분음표 1:4분음표 2:2분음표 4:온음표 · ↑↓ = 음높이 · H = 화음 · Alt+↑↓ = 줄 바꾸기 · ←→/Enter = 다음 음표 · 빈 곳 끌기 = 여러 개 고르기 · 고른 음표 끌기 = 다른 마디로 · N = 쓰기 모드</div>
     <button class="btn" id="bWrite" data-act="toggleWrite">✎ 쓰기 모드 끔</button>
     <div class="seg">${['w', 'h', 'q', 'e', 's'].map(d => `<button class="btn mus" data-dur="${d}" title="${DUR_KO[d]} (${Object.keys(NUMKEY_DUR).find(k => NUMKEY_DUR[k] === d)})">${DUR_GLYPH[d]}</button>`).join('')}</div>
     <button class="btn" id="bDot" data-act="dot" title="점 붙이기 (.)">점 붙이기 •</button>
@@ -1156,6 +1164,9 @@ function onMouseDown(e) {
   if (e.button !== 0) return;
   const p = pagePoint(e);
   closePop();
+  // 가사 칸이 열려 있으면 빈 곳을 눌러도 안 닫혀요 (Enter·[입력]으로 닫기 · 다른 마디를 누르면 저장하고 그 마디로)
+  const lyr = $('#pages .lyric-ed');
+  if (lyr && !e.target.closest('.editor') && (!p || !hit(p).g)) { const i = lyr.querySelector('input'); if (i) setTimeout(() => i.focus({ preventScroll: true }), 0); return; }
   if (!p) { if (e.target.closest('#scroller') && !e.target.closest('.editor')) { closeEditors(); if (App.mode === 'note' && App.sel.length) { App.sel = []; render(); } } return; }
   if (e.target.closest('.editor')) return;
   e.preventDefault();
@@ -1274,6 +1285,7 @@ function downNote(e, p, h) {
 function onMouseMove(e) {
   const d = App.drag;
   if (!d) {
+    if (e.target.closest && e.target.closest('.count-btn, .editor')) return;   // 작은 버튼·입력칸 위에서는 그대로
     const p = pagePoint(e);
     const h = p ? hit(p) : null;
     const hm = h && h.g ? h.mi : null;
@@ -1350,7 +1362,8 @@ function onMouseUp(e) {
   }
   if (d.type === 'rubber') {
     if (!d.moved) {
-      if (d.mi !== null && !App.write) countMenu(d.mi, d.client.x, d.client.y);
+      // 마디 클릭 = 그 마디 고르기만 (개수 창은 마디 오른쪽 위 작은 버튼 / Caps Lock 으로)
+      if (d.mi !== null && !App.write) { if (!d.add) App.sel = []; App.selMeasures = [d.mi]; App.mAnchor = d.mi; App.head = null; render(); }
       else if (!d.add) { App.sel = []; render(); }
       return;
     }
@@ -1484,6 +1497,41 @@ function countMenu(mi, x, y) {
   pop.addEventListener('mouseover', e => {
     const b = e.target.closest('.cp-kind button, .cp-grid button:not(:disabled), .cp-fill');
     if (b) { $$('.kfocus', pop).forEach(x => x.classList.remove('kfocus')); b.classList.add('kfocus'); }
+  });
+}
+/** 음표 모드: 고른 마디 · 고른 음표의 마디 · 마우스가 올라간 마디의 오른쪽 위에 작은 개수 버튼 (누르면 개수 창) */
+function drawCountButtons() {
+  if (App.mode !== 'note' || App.write || !App.lay) return;
+  const mis = new Set();
+  if (App.hoverMeasure !== null && App.hoverMeasure !== undefined) mis.add(App.hoverMeasure);
+  if (App.selMeasures.length) mis.add(App.selMeasures[0]);
+  const f = App.sel.length ? findNote(App.sel[0]) : null;
+  if (f) mis.add(f.mi);
+  const z = App.zoom, ns = nStaves();
+  mis.forEach(mi => {
+    const g = App.lay.meas[mi]; if (!g) return;
+    const pg = $(`.page[data-page="${g.page}"]`); if (!pg) return;
+    const tops = g.staffTops || [g.staffTop];
+    for (let si = 0; si < Math.min(ns, tops.length); si++) {
+      const n = SNr(S().measures[mi], si).length;
+      const b = document.createElement('button');
+      b.className = 'count-btn';
+      b.textContent = n ? `♩${n}` : '♩+';
+      b.title = LG(`${mi + 1}마디 음표 개수 정하기 (Caps Lock)`, `Measure ${mi + 1} — how many notes (Caps Lock)`, `${mi + 1}小節の音符の数 (Caps Lock)`);
+      b.style.left = ((g.x + g.w) * z - 34) + 'px';
+      b.style.top = (tops[si] * z - 21) + 'px';
+      b.addEventListener('mousedown', e => {
+        e.__bflat = true; e.preventDefault(); e.stopPropagation();
+        if (e.button !== 0) return;
+        closeEditors();
+        const r = b.getBoundingClientRect();
+        App.staff = si; App.selMeasures = [mi]; App.mAnchor = mi;
+        if (!f || f.mi !== mi) App.sel = [];
+        render();
+        countMenu(mi, r.left - 6, r.bottom - 4);
+      });
+      pg.appendChild(b);
+    }
   });
 }
 /** 개수 창이 떠 있을 때: 방향키 = 창 안에서 이동, Enter = 고르기, Esc/Caps Lock = 닫기 */
@@ -1642,15 +1690,27 @@ function openChordEditor(mi, t) {
   const g = App.lay.meas[mi];
   const m = S().measures[mi];
   const ex = m.chords.find(c => c.t === t);
-  const pg = $(`.page[data-page="${g.page}"]`);
-  const z = App.zoom;
   const box = document.createElement('div');
   box.className = 'editor chord-ed';
-  box.style.left = (tickX(g, t) - 8) * z + 'px';
-  box.style.top = (g.staffTop - 64) * z + 'px';
-  box.innerHTML = `<div class="ed-label">${beatLabel(mi, t)}</div><div class="ed-row"><button class="ed-nav" data-d="-1">◀</button><input value="${esc(ex ? ex.name : '')}" placeholder="C, Am7, G/B" spellcheck="false"><button class="ed-nav" data-d="1">▶</button></div>`;
-  pg.appendChild(box);
+  // 자주 쓰는 기호만 작게 (나머지는 직접 입력)
+  const KEYS = ['b', '#', 'm', 'M', 'sus4', '2', '7'];
+  box.innerHTML = `<div class="ed-label">${beatLabel(mi, t)}</div><div class="ed-row"><button class="ed-nav" data-d="-1">◀</button><input value="${esc(ex ? ex.name : '')}" placeholder="C, Am7, G/B" spellcheck="false" autocapitalize="off" autocomplete="off"><button class="ed-nav" data-d="1">▶</button></div><div class="ed-keys">${KEYS.map(k => `<button class="ed-key" data-k="${esc(k)}" tabindex="-1">${esc(k)}</button>`).join('')}</div>`;
+  box._place = () => {
+    const g = App.lay.meas[mi]; if (!g) return false;
+    const pg = $(`.page[data-page="${g.page}"]`); if (!pg) return false;
+    if (box.parentNode !== pg) pg.appendChild(box);
+    box.style.left = (tickX(g, t) - 8) * App.zoom + 'px';
+    box.style.top = (g.staffTop - 64) * App.zoom - (box.querySelector('.ed-keys').offsetHeight + 4) + 'px';
+    return true;
+  };
+  box._place();
   const inp = box.querySelector('input');
+  box.querySelectorAll('.ed-key').forEach(b => b.addEventListener('mousedown', e => {
+    e.preventDefault();   // 입력칸 포커스 그대로
+    const s = inp.selectionStart == null ? inp.value.length : inp.selectionStart, en = inp.selectionEnd == null ? s : inp.selectionEnd;
+    inp.setRangeText(b.dataset.k, s, en, 'end');
+    inp.focus();
+  }));
   inp.focus(); inp.select();
   let saved = false;
   const save = () => {
@@ -1692,18 +1752,24 @@ function openLyricEditor(mi) {
   const g = App.lay.meas[mi];
   const m = S().measures[mi];
   const v = App.verse;
-  const pg = $(`.page[data-page="${g.page}"]`);
-  const z = App.zoom;
   const box = document.createElement('div');
   box.className = 'editor lyric-ed';
-  const rowIdx = Math.max(0, g.sys.verses.indexOf(v));
-  box.style.left = (g.x + 2) * z + 'px';
-  box.style.top = (g.staffTop + 4 * L.SP + 10 + rowIdx * 21) * z + 'px';
-  box.style.width = Math.max(180, (g.w - 4) * z) + 'px';
   const notes = m.notes.filter(n => lyrSlot(n, App.lay.tied.into)).length;   // 쉼표도 한 자리
-  box.innerHTML = `<div class="ed-label">${mi + 1}마디 · ${v + 1}절 · 음표·쉼표 ${notes}개 <span class="cnt"></span></div><input value="${esc(m.lyrics[v] || '')}" placeholder="가사 (예: 참 반 가 운)" spellcheck="false">`;
-  pg.appendChild(box);
+  box.innerHTML = `<div class="ed-label">${mi + 1}마디 · ${v + 1}절 · 음표·쉼표 ${notes}개 <span class="cnt"></span></div><div class="ed-row"><input value="${esc(m.lyrics[v] || '')}" placeholder="가사 (예: 참 반 가 운)" spellcheck="false"><button class="ed-ok" tabindex="-1">${LG('입력', 'OK', '入力')}</button></div>`;
+  // 다시 그려도(마우스가 다른 마디로 가도) 같은 자리에 그대로 · Enter 나 [입력]을 눌러야 닫혀요
+  box._place = () => {
+    const g = App.lay.meas[mi]; if (!g) return false;
+    const pg = $(`.page[data-page="${g.page}"]`); if (!pg) return false;
+    if (box.parentNode !== pg) pg.appendChild(box);
+    const z = App.zoom, rowIdx = Math.max(0, g.sys.verses.indexOf(v));
+    box.style.left = (g.x + 2) * z + 'px';
+    box.style.top = (g.staffTop + 4 * L.SP + 10 + rowIdx * 21) * z + 'px';
+    box.style.width = Math.max(220, (g.w - 4) * z) + 'px';
+    return true;
+  };
+  box._place();
   const inp = box.querySelector('input'), cnt = box.querySelector('.cnt');
+  box.querySelector('.ed-ok').addEventListener('mousedown', e => { e.preventDefault(); save(); box._save = null; box.remove(); render(); });
   const upd = () => { const k = parseLyrics(inp.value).length; cnt.textContent = `· 음절 ${k}개`; cnt.style.color = k > notes ? '#dc2626' : ''; };
   upd(); inp.addEventListener('input', upd);
   inp.focus(); inp.setSelectionRange(inp.value.length, inp.value.length);
@@ -2220,7 +2286,7 @@ async function phonePane(el) {
   });
 }
 const SHORTCUTS = [
-  ['F1 음표', [['N', '쓰기 모드 켜기/끄기'], ['마디 클릭 (쓰기 모드 끔)', '음표/쉼표 개수 고르기 — 고친 것은 두고 뒤쪽에서 늘리거나 줄임'], ['Caps Lock', '지금 마디(고른 음표·빈 마디 커서가 있는 마디)의 개수 창 열기 — 마디 클릭과 같은 창'], ['H', '화음 탭으로 (멜로디를 다 쓴 다음에)'],['Shift + 클릭 (쓰기 모드)', '그 높이의 음을 화음으로 얹기 · 화음의 머리를 클릭하면 그 음만 고르기'], ['Alt + ↑ ↓', '큰보표·3단 악보에서 위/아래 줄로 옮기기'], ['개수 창이 떠 있을 때', '방향키 = 창 안에서 칸 옮기기 (음표/쉼표 · 숫자 · 쉼표로 채움) · Enter = 고르기 · Esc / Caps Lock = 닫기 — 개수가 정해지면 방향키는 다시 음표 이동'], ['빈 곳 클릭 (쓰기 모드 켬)', '그 높이에 음표 머리 추가'], ['음표 클릭', '고르기 (Shift = 범위, Ctrl = 하나씩 더하기)'], ['3 / ` / 1 / 2 / 4 (숫자열·넘패드)', '길이: 3=16분음표 `=8분음표 1=4분음표 2=2분음표 4=온음표'], ['. / 0', '점 붙이기 / 쉼표로 바꾸기'], ['쉼표 채움 버튼 두 개', '모든 부족한 박자 = 빈 마디까지 전부 · 작업한 마디만 = 음표를 넣어 빨갛게 된 마디만'], ['T', '셋잇단 켜고 끄기'], ['↑ ↓', '오선 한 칸 (Shift = 반음, Ctrl = 옥타브)'], ['A ~ G', '음 이름으로 바로'], ['← → / Enter', '이전·다음 음표 (Ctrl = 다음 마디)'], ['Alt + ← →', '고른 음표를 옆 음표와 자리 바꾸기'], ['끌기', '빈 곳에서 = 여러 개 고르기, 고른 음표 = 다른 마디로 옮기기 (쓰기 모드에선 위아래 = 음높이)'], ['Insert', '고른 음표 뒤에 새 음표'], ['꾸밈·셈여림·글자…', '악센트·스타카토·테누토·마르카토·늘임표 · 셈여림 · 템포·표현 글자 (♩=100 → 재생 빠르기도)'], ['Delete', '지우기']]],
+  ['F1 음표', [['N', '쓰기 모드 켜기/끄기'], ['마디 오른쪽 위 ♩ 버튼 (쓰기 모드 끔)', '음표/쉼표 개수 고르기 — 고친 것은 두고 뒤쪽에서 늘리거나 줄임'], ['Caps Lock', '지금 마디(고른 음표·빈 마디 커서가 있는 마디)의 개수 창 열기 — ♩ 버튼과 같은 창'], ['H', '화음 탭으로 (멜로디를 다 쓴 다음에)'],['Shift + 클릭 (쓰기 모드)', '그 높이의 음을 화음으로 얹기 · 화음의 머리를 클릭하면 그 음만 고르기'], ['Alt + ↑ ↓', '큰보표·3단 악보에서 위/아래 줄로 옮기기'], ['개수 창이 떠 있을 때', '방향키 = 창 안에서 칸 옮기기 (음표/쉼표 · 숫자 · 쉼표로 채움) · Enter = 고르기 · Esc / Caps Lock = 닫기 — 개수가 정해지면 방향키는 다시 음표 이동'], ['빈 곳 클릭 (쓰기 모드 켬)', '그 높이에 음표 머리 추가'], ['음표 클릭', '고르기 (Shift = 범위, Ctrl = 하나씩 더하기)'], ['3 / ` / 1 / 2 / 4 (숫자열·넘패드)', '길이: 3=16분음표 `=8분음표 1=4분음표 2=2분음표 4=온음표'], ['. / 0', '점 붙이기 / 쉼표로 바꾸기'], ['쉼표 채움 버튼 두 개', '모든 부족한 박자 = 빈 마디까지 전부 · 작업한 마디만 = 음표를 넣어 빨갛게 된 마디만'], ['T', '셋잇단 켜고 끄기'], ['↑ ↓', '오선 한 칸 (Shift = 반음, Ctrl = 옥타브)'], ['A ~ G', '음 이름으로 바로'], ['← → / Enter', '이전·다음 음표 (Ctrl = 다음 마디)'], ['Alt + ← →', '고른 음표를 옆 음표와 자리 바꾸기'], ['끌기', '빈 곳에서 = 여러 개 고르기, 고른 음표 = 다른 마디로 옮기기 (쓰기 모드에선 위아래 = 음높이)'], ['Insert', '고른 음표 뒤에 새 음표'], ['꾸밈·셈여림·글자…', '악센트·스타카토·테누토·마르카토·늘임표 · 셈여림 · 템포·표현 글자 (♩=100 → 재생 빠르기도)'], ['Delete', '지우기']]],
   ['H 화음 (멜로디 잠김)', [['← → / Enter · 클릭', '화음 넣을 자리 옮기기 — 멜로디 박마다, 넣은 화음 음의 시작·끝마다 멈춰요 (Ctrl = 다음 마디)'], ['3 / ` / 1 / 2 / 4', '그 자리에서 시작하는 화음 음 넣기 (멜로디 음 3도 아래) · 이미 있으면 길이 바꾸기 · 멜로디와 리듬이 달라도 돼요 · 마디당 16개까지'], ['.', '그 자리 화음 음에 바로 점 붙이기/떼기'], ['↑ ↓ / A ~ G', '화음 음 높이 (Shift = 반음, Ctrl = 옥타브)'], ['Insert', '그 화음 음에 한 음 더 (3도 아래)'], ['Delete', '그 자리 화음 음 지우기 (멜로디는 안 지워져요)'], ['보이는 모양', '멜로디와 같은 박·같은 길이면 한 기둥 화음 · 리듬이 다르면 멜로디 기둥은 위, 화음 기둥은 아래 · 8분음표끼리는 빔으로 이어요'], ['Alt + ↑ ↓', '위/아래 줄로'], ['Esc / H', '화음 쌓기 끝 → 음표 탭 (멜로디를 다시 고칠 수 있어요)']]],
   ['F2 이음줄', [['음표를 끌어 다른 음표에 놓기', '이음줄 만들기'], ['줄 클릭 → "붙임줄로 바꾸기" / T', '붙임줄 ↔ 이음줄 (붙임줄은 바로 옆 음끼리, 뒤 음 높이를 맞춰요)'], ['+ / S (음표 모드)', '다음 음과 붙임줄 / 이음줄']]],
   ['F3 ~ F6', [['마디선', '마디선 클릭 = 도돌이·겹세로줄 · 마디 클릭 = 1·2번 괄호, D.S., Coda · 끌기·Shift+클릭 = 여러 마디에 괄호 · 아래 상태줄에 재생 순서'], ['코드', '마디 위 점 클릭 → 입력 · Space / Shift+Space 또는 ◀▶ = 반 박씩 · Tab = 다음 점'], ['가사', '마디 클릭 → 그 마디 가사 ([두근]처럼 묶으면 한 음에 두 글자 · _ = 건너뛰기 · 띄어쓰기 두 칸 = 빈 음 · - = 한 음) · 가사 줄(1절·2절…)은 곡 정보의 "가사 줄 수"로'], ['송폼', '마디 위쪽 클릭 → Intro, Verse, Chorus …']]],
@@ -2233,7 +2299,7 @@ function shortcutsDialog() {
 const HELP_HTML = {
   ko: `<h2>BFlat Studio 사용법</h2><div class="sc help">
   <h3>1. 새 악보</h3><p>왼쪽 위 <b>파일 ▾ → 새 악보</b>에서 악보 종류(오선 · 큰보표 · 피아노+노래 · 피아노+악기 · 앙상블 2~5중주)를 고르고 제목·박자·조표·줄 수를 정해요. 아직 작업 안 한 마디는 <span class="pill blue">파란색</span>으로 보여요.</p>
-  <h3>2. 음표 넣기 (F1)</h3><p>마디를 클릭하거나 <b>Caps Lock</b>을 누르면 음표 개수를 고를 수 있어요 (예: 4 → 솔 자리에 음표 머리 넷). 음표를 고르고 <b>↑↓</b> 또는 <b>A~G</b>로 높이를, <b>3</b>(16분음표) · <b>\`</b>(8분음표) · <b>1</b>(4분음표) · <b>2</b>(2분음표) · <b>4</b>(온음표)로 길이를 바꿔요. 박자가 안 맞는 마디는 <span class="pill red">빨간색</span>.</p>
+  <h3>2. 음표 넣기 (F1)</h3><p>마디 오른쪽 위의 작은 <b>♩</b> 버튼을 누르거나 <b>Caps Lock</b>을 누르면 음표 개수를 고를 수 있어요 (예: 4 → 솔 자리에 음표 머리 넷). 음표를 고르고 <b>↑↓</b> 또는 <b>A~G</b>로 높이를, <b>3</b>(16분음표) · <b>\`</b>(8분음표) · <b>1</b>(4분음표) · <b>2</b>(2분음표) · <b>4</b>(온음표)로 길이를 바꿔요. 박자가 안 맞는 마디는 <span class="pill red">빨간색</span>.</p>
   <p><b>N</b>으로 쓰기 모드를 켜면 오선 빈 곳을 클릭해 바로 음표를 그릴 수 있어요. 끌면 음높이가 바뀌어요.</p>
   <h3>줄 · 화음</h3><p>줄을 클릭하면 그 줄에 쓰고, <b>Alt+↑↓</b>로 위아래 줄을 오가요. 멜로디를 다 쓴 다음 <b>H</b>(또는 위 "화음" 탭)를 누르면 화음 탭이 열려요. 이때 멜로디는 잠기고, 음표를 고르고 길이 키를 누를 때마다 그 위에 화음이 얹혀요 (길이가 달라도 돼요 · ↑↓로 높이). <b>Esc</b>로 끝내면 다시 멜로디를 고칠 수 있어요.</p>
   <h3>3. 이음줄·붙임줄 (F2)</h3><p>음표를 끌어 다른 음표에 놓으면 이음줄. 줄을 클릭하고 T를 누르면 붙임줄로.</p>
@@ -2245,7 +2311,7 @@ const HELP_HTML = {
   <h3>9. 설정 ⚙</h3><p>화면(어둡게·밝게) · 악보 종이 · 언어(한국어 · English · 日本語) · 소리 · 글꼴.</p></div>`,
   en: `<h2>How to use BFlat Studio</h2><div class="sc help">
   <h3>1. New score</h3><p>Open <b>File ▾ → New score</b> at the top left, choose a score type (single staff · grand staff · piano+voice · piano+instrument · ensemble of 2–5) and set the title, time, key and number of lines. Measures you have not worked on yet are <span class="pill blue">blue</span>.</p>
-  <h3>2. Entering notes (F1)</h3><p>Click a measure or press <b>Caps Lock</b> to choose how many notes it gets (e.g. 4 → four note heads on G). Select a note and use <b>↑↓</b> or <b>A–G</b> for pitch, and <b>3</b> (16th note) · <b>\`</b> (8th note) · <b>1</b> (quarter note) · <b>2</b> (half note) · <b>4</b> (whole note) for length. Measures with the wrong number of beats turn <span class="pill red">red</span>.</p>
+  <h3>2. Entering notes (F1)</h3><p>Tap the small <b>♩</b> button at the top right of a measure or press <b>Caps Lock</b> to choose how many notes it gets (e.g. 4 → four note heads on G). Select a note and use <b>↑↓</b> or <b>A–G</b> for pitch, and <b>3</b> (16th note) · <b>\`</b> (8th note) · <b>1</b> (quarter note) · <b>2</b> (half note) · <b>4</b> (whole note) for length. Measures with the wrong number of beats turn <span class="pill red">red</span>.</p>
   <p>Press <b>N</b> for write mode: click empty staff space to draw a note right away. Drag to change its pitch.</p>
   <h3>Staves · harmony</h3><p>Click a staff to write on it; <b>Alt+↑↓</b> moves between staves. When the melody is done press <b>H</b> (or the "Harmony" tab) — the melody is locked and every length key adds a harmony note on the selected beat (lengths may differ · ↑↓ for pitch). Press <b>Esc</b> to finish and edit the melody again.</p>
   <h3>3. Slurs · ties (F2)</h3><p>Drag a note onto another note for a slur. Click the curve and press T to turn it into a tie.</p>
@@ -2257,7 +2323,7 @@ const HELP_HTML = {
   <h3>9. Settings ⚙</h3><p>Display (dark · light) · paper · language (한국어 · English · 日本語) · sound · font.</p></div>`,
   ja: `<h2>BFlat Studioの使い方</h2><div class="sc help">
   <h3>1. 新しい楽譜</h3><p>左上の <b>ファイル ▾ → 新しい楽譜</b> で楽譜の種類(五線 · 大譜表 · ピアノ+歌 · ピアノ+楽器 · アンサンブル2〜5重奏)を選び、タイトル・拍子・調号・段数を決めます。まだ作業していない小節は <span class="pill blue">青</span> で表示されます。</p>
-  <h3>2. 音符の入力 (F1)</h3><p>小節をクリックするか <b>Caps Lock</b> を押すと音符の数を選べます (例: 4 → ソの位置に符頭4つ)。音符を選んで <b>↑↓</b> または <b>A〜G</b> で高さを、<b>3</b>(16分音符) · <b>\`</b>(8分音符) · <b>1</b>(4分音符) · <b>2</b>(2分音符) · <b>4</b>(全音符) で長さを変えます。拍が合わない小節は <span class="pill red">赤</span> になります。</p>
+  <h3>2. 音符の入力 (F1)</h3><p>小節右上の小さな <b>♩</b> ボタンを押すか <b>Caps Lock</b> を押すと音符の数を選べます (例: 4 → ソの位置に符頭4つ)。音符を選んで <b>↑↓</b> または <b>A〜G</b> で高さを、<b>3</b>(16分音符) · <b>\`</b>(8分音符) · <b>1</b>(4分音符) · <b>2</b>(2分音符) · <b>4</b>(全音符) で長さを変えます。拍が合わない小節は <span class="pill red">赤</span> になります。</p>
   <p><b>N</b> で書き込みモードをオンにすると、五線の空白をクリックしてすぐ音符を書けます。ドラッグで音の高さが変わります。</p>
   <h3>段 · 和音</h3><p>段をクリックするとその段に書き、<b>Alt+↑↓</b> で上下の段を移動します。メロディを書き終えたら <b>H</b>(または上の「和音」タブ)を押すと和音タブが開きます。メロディはロックされ、長さキーを押すたびに選んだ拍に和音が重なります (長さが違ってもOK · ↑↓で高さ)。<b>Esc</b> で終えるとまたメロディを直せます。</p>
   <h3>3. スラー・タイ (F2)</h3><p>音符をドラッグして別の音符に置くとスラー。線をクリックしてTを押すとタイになります。</p>
