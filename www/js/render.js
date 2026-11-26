@@ -72,11 +72,11 @@ function computeLayout(s, ctxs, opt) {
   lay.headH = headH;
   let y = L.TOPM + headH, page = { index: 0, systems: [], h: 0 };
   lay.pages.push(page);
-  let mi = 0;
   const tied = tieSets(s);
-  s.lines.forEach((count, li) => {
-    const idxs = [];
-    for (let k = 0; k < count && mi + k < s.measures.length; k++) idxs.push(mi + k);
+  // 쉬는 마디가 2마디 이상 이어지면 한 마디에 숫자로 (마디 편집 모드에서는 다 펼쳐요)
+  const runs = opt && opt.noMr ? new Map() : restRuns(s, ctxs);
+  displayLines(s, runs).forEach(dl => {
+    const idxs = dl.idxs, li = dl.li;
     if (!idxs.length) return;
     const first = idxs[0], c0 = ctxs[first];
     const keyN = Math.abs(c0.key);
@@ -101,9 +101,10 @@ function computeLayout(s, ctxs, opt) {
     const pre = idxs.map((i, k) => measureSegs(s, ctxs[i], s.measures[i], nSt, tied, verses));
     const PAD = L.MPAD_L + L.MPAD_R;
     let padS = 1;          // 마디 앞뒤 여백 비율 (줄이 빠듯하면 여백부터 줄여요 · 음표·글자 간격은 그대로)
-    let need = pre.map((p, k) => prefix[k] + PAD + p.lead + p.segs.reduce((a, sg) => a + sg.min, 0));
+    const isMr = idxs.map(i => runs.has(i));
+    let need = pre.map((p, k) => Math.max(isMr[k] ? 96 : 0, prefix[k] + PAD + p.lead + p.segs.reduce((a, sg) => a + sg.min, 0)));
     const needFull = need.slice();
-    const nat = pre.map((p, k) => prefix[k] + PAD + p.lead + p.segs.reduce((a, sg) => a + Math.max(sg.min, sg.f * 46), 0));
+    const nat = pre.map((p, k) => Math.max(isMr[k] ? 130 : 0, prefix[k] + PAD + p.lead + p.segs.reduce((a, sg) => a + Math.max(sg.min, sg.f * 46), 0)));
     let ws = idxs.map(i => s.measures[i].width || 0);
     const fixed = ws.filter(w => w > 0), autoN = ws.length - fixed.length;
     let overflow = false;
@@ -201,7 +202,7 @@ function computeLayout(s, ctxs, opt) {
       const dy = L.TOPM - y; y = L.TOPM;
       for (let si = 0; si < nSt; si++) staffTops[si] += dy;
     }
-    const sys = { li, page: page.index, top: y, staffTop: staffTops[0], staffTops, clefs, h, headerW, idxs, verses, hasForm, hasRow2, showTime, x0, x1: L.PW - L.MR, above: above0, indent, chordDy, lyrShift: ext[0].below + solH[0], solH, ext, overflow, hasChords: m0HasChords(s, idxs) };
+    const sys = { li, packed: dl.packed, page: page.index, top: y, staffTop: staffTops[0], staffTops, clefs, h, headerW, idxs, verses, hasForm, hasRow2, showTime, x0, x1: L.PW - L.MR, above: above0, indent, chordDy, lyrShift: ext[0].below + solH[0], solH, ext, overflow, hasChords: m0HasChords(s, idxs) };
     sys.staffBottom = staffTops[nSt - 1] + 4 * L.SP;
     let x = x0 + headerW;
     idxs.forEach((i, k) => {
@@ -233,11 +234,16 @@ function computeLayout(s, ctxs, opt) {
       if (!evs.length) anchors.splice(1, anchors.length, [c.cap, g.cx + g.cw]);
       g.anchors = anchors;
       lay.meas[i] = g;
+      if (runs.has(i)) {
+        // 여러 마디 쉼: 첫 마디에 그리고, 나머지 마디는 같은 자리(숨김)를 가리켜요
+        g.mrEnd = runs.get(i); g.mr = g.mrEnd - i + 1;
+        for (let j = i + 1; j <= g.mrEnd; j++) lay.meas[j] = Object.assign({}, g, { mi: j, hidden: true, mrFirst: i, mr: 0 });
+      }
       x += ws[k];
     });
     sys.bottom = y + h;
     page.systems.push(sys); lay.systems.push(sys);
-    y += h; mi += count;
+    y += h;
   });
   page.h = Math.max(y + L.BOTM, 300);
   lay.tied = tied;
@@ -316,7 +322,7 @@ function measureSegs(s, c, m, nSt, tied, verses) {
     leadNeed.push([first.t, first.l + 2 - 4 - padMinL]);
   };
   // 가사 (첫 줄 음표 · 절마다 한 줄)
-  const lyrTargets = evs.filter(e => e.si === 0 && !e.ov && lyrSlot(e.n, tied.into));   // 쉼표도 한 자리
+  const lyrTargets = evs.filter(e => e.si === 0 && !e.ov && lyrSlot(e.n, tied.noSyl));   // 쉼표도 한 자리
   verses.forEach(v => {
     const row = [];
     parseLyrics(m.lyrics[v]).forEach((sy, k) => { const e = lyrTargets[k]; if (!e || !sy || sy === '_') return; const w = textW(sy, 14); row.push({ t: e.t, l: w / 2, r: w / 2 }); });
@@ -418,11 +424,61 @@ function staffTopPos(m, si, clef, c) {
  * 줄에 마디가 너무 많아 음표끼리 겹치면 그 줄을 나눠요 (자동 인식처럼 원래 악보 줄 나눔을 그대로 가져올 때)
  * → 바뀌었으면 true
  */
-function refitLines(s) {
+/** 쉬기만 하는 마디: 모든 줄이 쉼표뿐 (박자 맞음) · 코드·가사·송폼·기호·괄호·셈여림 없음 */
+function isRestMeasure(s, c, m) {
+  if (!c || c.status !== 'ok' || m.pickup || m.form || m.volta || (m.marks && m.marks.length) || (m.chords && m.chords.length)) return false;
+  if (Object.values(m.lyrics || {}).some(t => (t || '').trim())) return false;
+  const nSt = staffCount(s);
+  for (let si = 0; si < nSt; si++) {
+    const arr = SNr(m, si);
+    if (!arr.length || OVr(m, si).length) return false;
+    if (!arr.every(n => n.rest && !n.dyn && !n.text && !(n.art && n.art.length))) return false;
+  }
+  return true;
+}
+/** 2마디 이상 이어진 쉬는 마디 → Map(첫 마디 → 끝 마디) · 조·박자 바뀜, 도돌이표·겹세로줄에서는 끊어요 */
+function restRuns(s, ctxs) {
+  const runs = new Map(), N = s.measures.length;
+  let i = 0;
+  while (i < N) {
+    if (!isRestMeasure(s, ctxs[i], s.measures[i])) { i++; continue; }
+    let e = i;
+    while (e + 1 < N && !s.measures[e].end && s.measures[e + 1].start !== 'repeatStart' && !ctxs[e + 1].keyChanged && !ctxs[e + 1].timeChanged && isRestMeasure(s, ctxs[e + 1], s.measures[e + 1])) e++;
+    if (e > i) runs.set(i, e);
+    i = e + 1;
+  }
+  return runs;
+}
+/** 그릴 줄: 보통은 s.lines 그대로 · 여러 마디 쉼이 있으면 그 묶음을 한 마디로 세어 줄마다 같은 칸 수로 채워요 (악보가 짧아져요) */
+function displayLines(s, runs) {
+  const orig = [];
+  let mi = 0;
+  s.lines.forEach((cnt, li) => {
+    const idxs = [];
+    for (let k = 0; k < cnt && mi + k < s.measures.length; k++) idxs.push(mi + k);
+    mi += cnt;
+    if (idxs.length) orig.push({ li, idxs });
+  });
+  if (!runs.size) return orig;
+  const units = [];
+  for (let i = 0; i < s.measures.length;) { const e = runs.has(i) ? runs.get(i) : i; units.push([i, e]); i = e + 1; }
+  const out = [];
+  let u = 0;
+  orig.forEach(o => {
+    if (u >= units.length) return;
+    const take = units.slice(u, u + o.idxs.length); u += take.length;
+    const idxs = take.map(x => x[0]);
+    const same = idxs.length === o.idxs.length && take.every((x, k) => x[0] === x[1] && x[0] === o.idxs[k]);
+    out.push({ li: o.li, idxs, packed: !same });
+  });
+  while (u < units.length) { const take = units.slice(u, u + 4); u += take.length; out.push({ li: orig.length, idxs: take.map(x => x[0]), packed: true }); }
+  return out;
+}
+function refitLines(s, opt) {
   let changed = false;
   for (let guard = 0; guard < 40; guard++) {
-    const lay = computeLayout(s, computeContexts(s), {});
-    const bad = lay.systems.find(sy => sy.overflow && sy.idxs.length > 1);
+    const lay = computeLayout(s, computeContexts(s), opt || {});
+    const bad = lay.systems.find(sy => sy.overflow && sy.idxs.length > 1 && !sy.packed);
     if (!bad) break;
     // 고르게 나누기: 2줄, 3줄 … 으로 나눠서 모든 줄이 들어가는 가장 적은 줄 수
     // 들어갈 수 있는 폭: 마디 앞뒤 여백은 (마디마다) 30%까지 줄일 수 있어요 — computeLayout 과 같은 규칙
@@ -473,7 +529,7 @@ function xTick(g, x) {
 function tieSets(s) {
   const from = new Map(), into = new Set();
   (s.slurs || []).forEach(x => { if (x.type === 'tie') { from.set(x.a, x.b); into.add(x.b); } });
-  return { from, into };
+  return { from, into, noSyl: noSylSet(s, into) };
 }
 
 /* ---------- 그리기 도우미 ---------- */
@@ -816,7 +872,9 @@ function svgBrace(x, y1, y2) {
 }
 
 function drawMeasure(s, ctxs, lay, sys, i, k, out, o) {
-  const m = s.measures[i], c = ctxs[i], g = lay.meas[i], SP = L.SP;
+  const c = ctxs[i], g = lay.meas[i], SP = L.SP;
+  // 여러 마디 쉼: 끝 세로줄은 묶음의 마지막 마디 것
+  const m = g.mr ? Object.assign({}, s.measures[i], { end: s.measures[g.mrEnd].end }) : s.measures[i];
   const tops = sys.staffTops, nSt = tops.length;
   const top = tops[0], botAll = sys.staffBottom;
   const { font, st } = o;
@@ -855,6 +913,17 @@ function drawMeasure(s, ctxs, lay, sys, i, k, out, o) {
   // 음표 (줄마다)
   g.notesGeo = [];
   g.geoSt = [];
+  if (g.mr) {
+    // 여러 마디 쉼표: 가운데 굵은 가로줄 + 양 끝 세로 + 위에 마디 수
+    const x1 = g.cx + 6, x2 = g.cx + g.cw - 6;
+    tops.forEach(t => {
+      out.push(`<g class="mrest"><rect x="${f1(x1)}" y="${f1(t + 2 * SP - 4)}" width="${f1(x2 - x1)}" height="8" fill="#111"/>` +
+        `<line x1="${f1(x1)}" y1="${f1(t + SP)}" x2="${f1(x1)}" y2="${f1(t + 3 * SP)}" stroke="#111" stroke-width="1.6"/><line x1="${f1(x2)}" y1="${f1(t + SP)}" x2="${f1(x2)}" y2="${f1(t + 3 * SP)}" stroke="#111" stroke-width="1.6"/>` +
+        `<text x="${f1((x1 + x2) / 2)}" y="${f1(t - 7)}" text-anchor="middle" font-family="'Times New Roman',serif" font-size="19" font-weight="700" fill="#111">${g.mr}</text></g>`);
+      g.geoSt.push([]);
+    });
+    return;
+  }
   for (let si = 0; si < nSt; si++) {
     const geos = drawStaffNotes(s, c, g, sys, i, si, out, o, lay);
     g.geoSt.push(geos);
@@ -875,7 +944,7 @@ function drawMeasure(s, ctxs, lay, sys, i, k, out, o) {
 
   // 가사 (첫 줄 아래)
   const bot = top + 4 * SP;
-  const sylTargets = g.geoSt[0].filter(gg => !gg.ov && lyrSlot(gg.n, lay.tied.into));   // 쉼표도 한 자리
+  const sylTargets = g.geoSt[0].filter(gg => !gg.ov && lyrSlot(gg.n, lay.tied.noSyl));   // 쉼표도 한 자리
   sys.verses.forEach((v, row) => {
     const syl = parseLyrics(m.lyrics[v]);
     if (!syl.length) return;
