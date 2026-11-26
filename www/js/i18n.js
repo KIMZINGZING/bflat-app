@@ -8,6 +8,7 @@
 const LANGS = [['ko', '한국어'], ['en', 'English'], ['ja', '日本語']];
 // '한국어': ['English', '日本語']
 const I18N_DICT = {
+  '이음줄 (S) — 고른 음표에 달기 · 악보의 이음줄을 누르면 여기서 고치기': ['Slur (S) — add to selected notes · tap a slur in the score to edit it here', 'スラー (S) — 選んだ音符に付ける · 楽譜のスラーを押すとここで編集'],
   '(16분음표) ·': ['(16th note) ·', '(16分音符) ·'],
   '(2분음표) ·': ['(half note) ·', '(2分音符) ·'],
   '(4분음표) ·': ['(quarter note) ·', '(4分音符) ·'],
