@@ -20,7 +20,7 @@ const Auth = {
   },
   /** 로그아웃한 뒤에도 로그인 칸에 넣어 둘 마지막 이메일 */
   lastEmail() { const a = this.get(); if (a) return a.email; try { return localStorage.getItem(this.KEY + '.last') || ''; } catch (e) { return ''; } },
-  lang() { const l = (window.App && App.settings && App.settings.lang) || 'ko'; return /^(en|ja)$/.test(l) ? l : 'ko'; },
+  lang() { const l = (typeof App !== 'undefined' && App.settings && App.settings.lang) || 'ko'; return /^(en|ja)$/.test(l) ? l : 'ko'; },
 
   /** Firebase 부르기 → 성공 { ...응답 } · 실패 { error: 'EMAIL_EXISTS' 같은 이름 } */
   async call(path, body, base) {
@@ -138,9 +138,9 @@ const Auth = {
       <label class="fld">${LG('비밀번호 (8자 이상)', 'Password (8+ characters)', 'パスワード (8文字以上)')}<span class="auth-pw"><input class="inp" id="aPw" type="password" autocomplete="new-password"><button type="button" class="btn" data-eye>👁</button></span></label>
       <label class="fld">${LG('비밀번호 확인', 'Confirm password', 'パスワード確認')}<input class="inp" id="aPw2" type="password" autocomplete="new-password"></label>
       <label class="chk auth-agree"><input type="checkbox" id="aAgree"> <span>${LG('<b>(필수)</b> 개인정보 수집·이용에 동의해요', '<b>(Required)</b> I agree to the collection and use of personal data', '<b>(必須)</b> 個人情報の収集・利用に同意します')} <a href="#" data-privacy>${LG('내용 보기', 'Details', '内容')}</a></span></label>
-      <div class="auth-privacy" hidden>${LG('수집 항목: 이메일 주소 · 쓰는 곳: 회원 확인, 로그인, 비밀번호 찾기 · 보관: 회원 탈퇴할 때까지 (설정 → 계정 → 회원 탈퇴로 바로 지워져요) · 계정 정보는 Google Firebase에 안전하게 저장돼요. 비밀번호는 암호화되어 아무도 볼 수 없어요. 악보는 이 기기에만 저장돼요. 동의하지 않으면 가입할 수 없어요.',
-        'Collected: email address · Used for: account check, login, password reset · Kept until you delete your account (Settings → Account → Delete account) · Account data is stored securely by Google Firebase; passwords are encrypted and nobody can read them. Your scores stay on this device. You cannot sign up without agreeing.',
-        '収集項目: メールアドレス · 利用目的: 会員確認・ログイン・パスワード再設定 · 保管: 退会まで (設定 → アカウント → 退会ですぐ削除) · アカウント情報はGoogle Firebaseに安全に保存され、パスワードは暗号化されて誰にも見えません。楽譜はこの端末にだけ保存されます。同意しないと登録できません。')}</div>
+      <div class="auth-privacy" hidden>${LG('수집 항목: 이메일 주소 · "내 악보함"에 저장한 악보 · 쓰는 곳: 회원 확인, 로그인, 비밀번호 찾기, 같은 계정의 PC·휴대폰·태블릿끼리 내 악보함 맞추기 · 보관: 회원 탈퇴할 때까지 (설정 → 계정 → 회원 탈퇴로 계정과 올린 악보가 바로 지워져요 · 연동은 설정 → 계정에서 끌 수 있어요) · Google Firebase에 안전하게 저장되고, 본인 계정만 자기 악보를 볼 수 있어요. 비밀번호는 암호화되어 아무도 볼 수 없어요. 동의하지 않으면 가입할 수 없어요.',
+        'Collected: email address · scores saved to "My scores" · Used for: account check, login, password reset, syncing My scores between your PC, phone and tablet · Kept until you delete your account (Settings → Account → Delete account removes the account and uploaded scores at once · sync can be turned off in Settings → Account) · Stored securely by Google Firebase; only your account can read your scores. Passwords are encrypted and nobody can read them. You cannot sign up without agreeing.',
+        '収集項目: メールアドレス · 「マイ楽譜」に保存した楽譜 · 利用目的: 会員確認・ログイン・パスワード再設定・同じアカウントのPC・スマホ・タブレット間のマイ楽譜同期 · 保管: 退会まで (設定 → アカウント → 退会でアカウントとアップロードした楽譜がすぐ削除 · 同期は設定 → アカウントでオフにできます) · Google Firebaseに安全に保存され、本人のアカウントだけが自分の楽譜を見られます。パスワードは暗号化されて誰にも見えません。同意しないと登録できません。')}</div>
       <p class="auth-msg"></p>
       <button class="btn primary auth-go" data-go>${LG('가입하고 인증 메일 받기', 'Sign up & send email', '登録して認証メールを受け取る')}</button>
       <p class="auth-alt">${LG('이미 계정이 있나요?', 'Already have an account?', 'アカウントをお持ちですか?')} <a href="#" data-view="login">${LG('로그인', 'Log in', 'ログイン')}</a></p>`);
@@ -242,6 +242,7 @@ const Auth = {
   },
   welcome(text) {
     clearInterval(this.timer);
+    if (typeof Cloud !== 'undefined') Cloud.soon(1200);     // 로그인하자마자 다른 기기의 내 악보함 받아오기
     this.frame(text, `<p class="auth-sub" data-notr>${esc((this.get() || {}).email || '')}</p><button class="btn primary auth-go" data-go>${LG('시작하기', 'Start', 'はじめる')}</button>`);
     this.root.querySelector('[data-go]').addEventListener('click', () => this.done());
     setTimeout(() => { if (this.root && this.root.querySelector('[data-go]')) this.done(); }, 1600);
@@ -260,14 +261,20 @@ const Auth = {
     const a = this.get();
     el.innerHTML = `<div class="pl-box">
       <div>${LG('로그인한 계정', 'Signed in as', 'ログイン中のアカウント')}: <b data-notr>${esc(a ? a.email : '-')}</b> ${a && a.verified ? '✓' : ''}</div>
-      <p class="muted small">${LG('악보는 이 기기에 저장돼요. 계정은 이 앱을 쓰는 사람을 확인하는 데만 써요.', 'Scores are saved on this device. The account is only used to identify you.', '楽譜はこの端末に保存されます。アカウントは利用者の確認にだけ使います。')}</p>
+      <label class="chk" style="margin-top:10px"><input type="checkbox" id="acSync"${App.settings.cloudSync === false ? '' : ' checked'}> <b>${LG('내 악보함 계정 연동', 'Sync My scores with this account', 'マイ楽譜をアカウントで同期')}</b></label>
+      <p class="muted small" style="margin:2px 0 6px 22px">${LG('같은 계정으로 로그인한 PC·휴대폰·태블릿의 "내 악보함"이 똑같이 맞춰져요 (저장·지우기·이름 바꾸기 모두). 끄면 이 기기에만 저장돼요.', 'My scores stays the same on every PC, phone and tablet logged in with this account (saves, deletes and renames). Turn off to keep scores on this device only.', '同じアカウントでログインしたPC・スマホ・タブレットのマイ楽譜が同じになります (保存・削除・名前変更)。オフにするとこの端末だけに保存されます。')}</p>
+      <div class="small lib-cloud" style="margin:0 0 10px 22px">${typeof Cloud !== 'undefined' ? Cloud.statusHtml() : ''}</div>
       <div class="row2"><button class="btn" id="acReset">${LG('비밀번호 바꾸기 (메일로)', 'Change password (by email)', 'パスワード変更 (メールで)')}</button><button class="btn" id="acOut">${LG('로그아웃', 'Log out', 'ログアウト')}</button></div>
       <details style="margin-top:12px"><summary class="small">${LG('회원 탈퇴', 'Delete account', '退会')}</summary>
-        <p class="small muted">${LG('계정(이메일)이 바로 지워지고 되돌릴 수 없어요. 이 기기의 악보는 그대로 남아요. 확인을 위해 비밀번호를 넣어 주세요.', 'Your account (email) is deleted immediately and cannot be restored. Scores on this device stay. Enter your password to confirm.', 'アカウント(メール)はすぐ削除され、元に戻せません。この端末の楽譜は残ります。確認のためパスワードを入れてください。')}</p>
+        <p class="small muted">${LG('계정(이메일)과 계정에 올린 악보가 바로 지워지고 되돌릴 수 없어요. 이 기기의 내 악보함은 그대로 남아요. 확인을 위해 비밀번호를 넣어 주세요.', 'Your account (email) and the scores uploaded to it are deleted immediately and cannot be restored. My scores on this device stay. Enter your password to confirm.', 'アカウント(メール)とアップロードした楽譜はすぐ削除され、元に戻せません。この端末のマイ楽譜は残ります。確認のためパスワードを入れてください。')}</p>
         <div class="row2"><input class="inp" id="acPw" type="password" autocomplete="current-password" placeholder="${LG('비밀번호', 'Password', 'パスワード')}"><button class="btn danger" id="acDel">${LG('탈퇴하기', 'Delete', '退会する')}</button></div>
       </details>
       <p class="small" id="acMsg"></p></div>`;
     const msg = (t, bad) => { const m = el.querySelector('#acMsg'); m.textContent = t; m.style.color = bad ? '#dc2626' : ''; };
+    el.querySelector('#acSync').addEventListener('change', e => {
+      App.settings.cloudSync = e.target.checked; saveSettings();
+      if (e.target.checked && typeof Cloud !== 'undefined') Cloud.sync(); else if (typeof Cloud !== 'undefined') Cloud.onStatus();
+    });
     el.querySelector('#acReset').addEventListener('click', async () => {
       if (!a) return;
       const r = await this.sendReset(a.email);
@@ -284,6 +291,12 @@ const Auth = {
       if (!confirm(LG('정말 탈퇴할까요? 계정이 바로 지워지고 되돌릴 수 없어요.', 'Really delete your account? This cannot be undone.', '本当に退会しますか? 元に戻せません。'))) return;
       const s = await this.signIn(a.email, pw);
       if (s.error) return msg(this.errText(s.error), true);
+      // 계정에 올린 악보부터 지워요 (연동 서버가 없거나 올린 게 없으면 그냥 넘어가요 · 인터넷이 끊겼으면 멈춰요)
+      if (typeof Cloud !== 'undefined' && Cloud.acct()) {
+        msg(LG('계정에 올린 악보를 지우는 중…', 'Deleting uploaded scores…', 'アップロードした楽譜を削除中…'));
+        const w = await Cloud.wipe();
+        if (w.error === 'NETWORK') return msg(this.errText('NETWORK'), true);
+      }
       const d = await this.deleteAccount(s.idToken);
       if (d.error) return msg(this.errText(d.error), true);
       this.set(null); try { localStorage.removeItem(this.KEY + '.last'); } catch (e) { } closeModal();
