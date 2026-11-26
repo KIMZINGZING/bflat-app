@@ -316,7 +316,7 @@ function measureSegs(s, c, m, nSt, tied, verses) {
     leadNeed.push([first.t, first.l + 2 - 4 - padMinL]);
   };
   // 가사 (첫 줄 음표 · 절마다 한 줄)
-  const lyrTargets = evs.filter(e => e.si === 0 && !e.ov && !e.n.rest && e.n.p && !tied.into.has(e.n.id));
+  const lyrTargets = evs.filter(e => e.si === 0 && !e.ov && lyrSlot(e.n, tied.into));   // 쉼표도 한 자리
   verses.forEach(v => {
     const row = [];
     parseLyrics(m.lyrics[v]).forEach((sy, k) => { const e = lyrTargets[k]; if (!e || !sy || sy === '_') return; const w = textW(sy, 14); row.push({ t: e.t, l: w / 2, r: w / 2 }); });
@@ -713,6 +713,7 @@ function renderScore(s, ctxs, lay, st) {
 
   // 이음줄·붙임줄
   lay.slurs = [];
+  lay.slurEnds = {};     // 이음줄 양 끝 (끌어서 옮길 때 잡는 곳)
   (s.slurs || []).forEach(sl => {
     const a = lay.notes[sl.a], b = lay.notes[sl.b];
     if (!a || !b) return;
@@ -745,7 +746,8 @@ function renderScore(s, ctxs, lay, st) {
       segs.push({ page: a.page, x1: xa, y1: ya, x2: a.sysObj.x1 - 2, y2: ya });
       segs.push({ page: b.page, x1: b.sysObj.x0 + b.sysObj.headerW - 6, y1: yb, x2: xb, y2: yb });
     }
-    segs.forEach(sg => {
+    const ends = lay.slurEnds[sl.id] = { tie: isTie };
+    segs.forEach((sg, si0) => {
       let { x1, y1, x2, y2 } = sg;
       if (!isTie) {
         // 끝이 너무 비스듬하지 않게
@@ -760,8 +762,12 @@ function renderScore(s, ctxs, lay, st) {
       pages[sg.page].parts.push(`<path d="${d}" fill="${col}" stroke="${col}" stroke-width=".6"/>`);
       const pts = [];
       for (let k = 0; k <= 12; k++) { const t = k / 12, u = 1 - t; pts.push([u * u * u * x1 + 3 * u * u * t * mx1 + 3 * u * t * t * mx2 + t * t * t * x2, u * u * u * y1 + 3 * u * u * t * (y1 + hgt) + 3 * u * t * t * (y2 + hgt) + t * t * t * y2]); }
-      lay.slurs.push({ id: sl.id, page: sg.page, pts });
+      lay.slurs.push({ id: sl.id, page: sg.page, pts, seg: si0, nseg: segs.length });
+      if (si0 === 0) ends.a = { page: sg.page, x: x1, y: y1 };
+      if (si0 === segs.length - 1) ends.b = { page: sg.page, x: x2, y: y2 };
     });
+    // 고른 이음줄: 양 끝 손잡이 (끌면 그 끝만 옮겨요 · 붙임줄은 통째로만)
+    if (sel && !isTie) ['a', 'b'].forEach(k => { const e = ends[k]; if (e) pages[e.page].parts.push(`<circle cx="${f1(e.x)}" cy="${f1(e.y)}" r="${st.slurHandleR || 4}" fill="#fff" stroke="#2563eb" stroke-width="1.6"/>`); });
   });
   return pages;
 }
@@ -869,7 +875,7 @@ function drawMeasure(s, ctxs, lay, sys, i, k, out, o) {
 
   // 가사 (첫 줄 아래)
   const bot = top + 4 * SP;
-  const sylTargets = g.geoSt[0].filter(gg => !gg.ov && !gg.rest && !lay.tied.into.has(gg.n.id));
+  const sylTargets = g.geoSt[0].filter(gg => !gg.ov && lyrSlot(gg.n, lay.tied.into));   // 쉼표도 한 자리
   sys.verses.forEach((v, row) => {
     const syl = parseLyrics(m.lyrics[v]);
     if (!syl.length) return;
