@@ -69,6 +69,13 @@ function buildPerformance(s, ctxs, opt) {
         if ((n.art || []).includes('staccato')) dd *= .5;
         if ((n.art || []).includes('fermata')) dd *= 1.6;
         const v = vel[si] * ((n.art || []).some(a => a === 'accent' || a === 'marcato') ? 1.18 : 1) * (midis.length > 2 ? .8 : 1);
+        // 박자치기 (X 머리): 음 높이 없이 손뼉 소리
+        if (isClap(n)) { ev.push({ time: st, dur: Math.min(dd, .25), midi: 60, vel: Math.min(1, v), id: n.id, mi, perc: true }); return; }
+        // 꾸밈음: 박 바로 앞에 짧게 (앞 음표 끝을 조금 빌려요)
+        if (n.gr && n.gr.length && (k > k0 || t0 > skip)) {
+          const gd = Math.min(.07, dur / 4);
+          n.gr.forEach((p, g) => ev.push({ time: st - gd * (n.gr.length - g), dur: gd, midi: pitchMidi(p), vel: Math.min(1, v * .85), id: n.id, mi }));
+        }
         const made = fresh.map(md => ({ time: st, dur: dd, midi: md, vel: Math.min(1, v), id: n.id, mi }));
         made.forEach(e => ev.push(e));
         if (tied.from.has(n.id)) pending.set(tied.from.get(n.id), carry.concat(made));
@@ -132,7 +139,7 @@ function voice(ac, dest, midi, when, dur, vel, timbre) {
 /** 소리 낼 음 목록 (시간 순) — 음표 + 코드 반주 */
 function performanceVoices(perf, settings) {
   const list = [];
-  perf.ev.forEach(e => list.push({ time: e.time, dur: Math.max(.05, e.dur * .97), midi: e.midi, vel: e.vel }));
+  perf.ev.forEach(e => list.push({ time: Math.max(0, e.time), dur: Math.max(.05, e.dur * .97), midi: e.midi, vel: e.vel, perc: e.perc }));
   if (settings.chordAccomp) perf.chords.forEach(c => {
     const d = Math.max(.1, c.dur * .95);
     list.push({ time: c.time, dur: d, midi: c.bass !== undefined ? c.bass : c.tones.bass, vel: .55 });
@@ -141,7 +148,22 @@ function performanceVoices(perf, settings) {
   // 값이 이상한 음은 빼요 (하나 때문에 뒤의 모든 소리가 안 나는 일이 없게)
   return list.filter(v => [v.time, v.dur, v.midi, v.vel].every(Number.isFinite) && v.vel > 0).sort((a, b) => a.time - b.time);
 }
+/** 손뼉 소리 (박자치기): 짧은 잡음 + 대역 필터 */
+function clapVoice(ac, dest, when, vel) {
+  const len = Math.floor(ac.sampleRate * .18);
+  const buf = ac.createBuffer(1, len, ac.sampleRate), d = buf.getChannelData(0);
+  for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
+  const src = ac.createBufferSource(); src.buffer = buf;
+  const bp = ac.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 1400; bp.Q.value = .9;
+  const g = ac.createGain();
+  g.gain.setValueAtTime(0, when); g.gain.linearRampToValueAtTime(.5 * vel, when + .003);
+  g.gain.exponentialRampToValueAtTime(.12 * vel, when + .02); g.gain.exponentialRampToValueAtTime(.0005, when + .17);
+  src.connect(bp); bp.connect(g); g.connect(dest);
+  src.start(when); src.stop(when + .2);
+  return [src];
+}
 function playVoice(ac, dest, v, t0, settings) {
+  if (v.perc) { try { return clapVoice(ac, dest, t0 + v.time, v.vel); } catch (e) { return []; } }
   try { return voice(ac, dest, v.midi, t0 + v.time, v.dur, v.vel, settings.timbre); } catch (e) { console.warn('음 하나를 건너뛰었어요', v, e); return []; }
 }
 /** 한꺼번에 모두 (WAV 만들기용) */
