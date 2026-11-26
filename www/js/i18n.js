@@ -256,7 +256,7 @@ const I18N_DICT = {
   '마디 클릭 / Shift+클릭 / 끌기': ['Click / Shift+click / drag measures', '小節クリック / Shift+クリック / ドラッグ'],
   '마디 클릭 / Shift+클릭 / 끌기 = 마디 고르기 · 고른 마디 끌기 = 옮기기 · Ctrl+C/X/V · Delete · Insert': ['Click / Shift+click / drag = select measures · drag selected = move · Ctrl+C/X/V · Delete · Insert', '小節クリック / Shift+クリック / ドラッグ = 小節を選択 · 選んだ小節をドラッグ = 移動 · Ctrl+C/X/V · Delete · Insert'],
   '마디 클릭 → 그 마디 가사 ([두근]처럼 묶으면 한 음에 두 글자 · _ = 건너뛰기) · 가사 줄(1절·2절…)은 곡 정보의': ['Click a measure → its lyrics ([ab] puts two letters on one note · _ = skip) · lyric lines (verse 1, 2 …) are set by', '小節クリック → その小節の歌詞 ([ドキ]のように括ると1音に2文字 · _ = 飛ばす) · 歌詞の段(1番・2番…)は曲情報の'],
-  '마디 클릭 → 그 마디 가사 ([두근]처럼 묶으면 한 음에 두 글자 · _ = 한 음 건너뛰기) · Enter = 다음 마디 · 가사 줄 수는 곡 정보에서': ['Click a measure → its lyrics ([ab] puts two letters on one note · _ = skip a note) · Enter = next measure · number of lyric lines is in Score info', '小節クリック → その小節の歌詞 ([ドキ]のように括ると1音に2文字 · _ = 1音飛ばす) · Enter = 次の小節 · 歌詞の段数は曲情報で'],
+  '마디 클릭 → 그 마디 가사 ([두근]처럼 묶으면 한 음에 두 글자 · _ = 한 음 건너뛰기 · 띄어쓰기 두 칸 = 빈 음 · - = 한 음) · Enter = 다음 마디 · 가사 줄 수는 곡 정보에서': ['Click a measure → its lyrics ([ab] puts two letters on one note · _ = skip a note · two spaces = empty note · lone - = one note) · Enter = next measure · number of lyric lines is in Score info', '小節クリック → その小節の歌詞 ([ドキ]のように括ると1音に2文字 · _ = 1音飛ばす · スペース2つ = 空の音 · - = 1音) · Enter = 次の小節 · 歌詞の段数は曲情報で'],
   '마디 편집': ['Measures', '小節編集'],
   '마디 폭': ['Measure width', '小節の幅'],
   '마디(또는 마디선)를 먼저 고르세요': ['Select a measure (or barline) first', '先に小節(または小節線)を選んでください'],
@@ -593,7 +593,7 @@ const I18N_DICT = {
   '화음 음 얹기': ['— add as harmony', 'の和音を重ねる'],
   '방금 얹은 화음 음에 점 (.)': ['Dot on the harmony note just added (.)', '今重ねた和音に付点 (.)'],
   '· 지금': ['· current', '· 現在'],
-  '마디 클릭 → 그 마디 가사 ([두근]처럼 묶으면 한 음에 두 글자 · _ = 건너뛰기) · 가사 줄(1절·2절…)은 곡 정보의 "가사 줄 수"로': ['Click a measure → its lyrics ([ab] puts two letters on one note · _ = skip) · lyric lines (verse 1, 2 …) are set with "Lyric lines" in Score info', '小節クリック → その小節の歌詞 ([ドキ]のように括ると1音に2文字 · _ = 飛ばす) · 歌詞の段(1番・2番…)は曲情報の「歌詞の段数」で'],
+  '마디 클릭 → 그 마디 가사 ([두근]처럼 묶으면 한 음에 두 글자 · _ = 건너뛰기 · 띄어쓰기 두 칸 = 빈 음 · - = 한 음) · 가사 줄(1절·2절…)은 곡 정보의 "가사 줄 수"로': ['Click a measure → its lyrics ([ab] puts two letters on one note · _ = skip · two spaces = empty note · lone - = one note) · lyric lines (verse 1, 2 …) are set with "Lyric lines" in Score info', '小節クリック → その小節の歌詞 ([ドキ]のように括ると1音に2文字 · _ = 飛ばす · スペース2つ = 空の音 · - = 1音) · 歌詞の段(1番・2番…)は曲情報の「歌詞の段数」で'],
   // 새로 넣은 기능 (설정 · 내 악보함 · 사진·한글 인식)
   '휴대폰 앱': ['Phone app', 'スマホアプリ'],
   '휴대폰 앱 업데이트 올리기는 바탕화면 프로그램에서만 돼요.': ['Publishing phone-app updates works only in the desktop app.', 'スマホアプリの更新アップロードはデスクトップ版でのみ使えます。'],
