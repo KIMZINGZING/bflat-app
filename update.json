@@ -1,6 +1,6 @@
 {
- "version": "9f425ea2ec63",
- "built": "2026-11-26 21:33",
+ "version": "0e566c50bb36",
+ "built": "2026-11-27 00:05",
  "files": {
   "assets/apple-touch-icon.png": {
    "sha256": "e9aca0c2fe30a5f6300661decbd1d578c00c7c0cead84b40374e696224d6712f",
@@ -39,40 +39,40 @@
    "size": 5267
   },
   "js/app.js": {
-   "sha256": "b64814569b3a545cfa92d93fdfd41839d1798f1276dde76f2b42b274c6a7beda",
-   "size": 288837
+   "sha256": "c2e07227c360ba09d190948c184dd741b7cd5f96652bf3655debb9d438a495a8",
+   "size": 304925
   },
   "js/audio.js": {
-   "sha256": "1197d4458b423279714557c5e262103ef2e32ffd81672718c5a8a4d6a4eb69dc",
-   "size": 12391
+   "sha256": "7f0a57499869b7346c64b032bb935bd12f89af96c1ad27a179c3e91cdedf58f4",
+   "size": 13902
   },
   "js/auth-config.js": {
    "sha256": "04069d0b0e4eec64138a996288e3ad45de5ffdda725712334cc9c15d14db640b",
    "size": 510
   },
   "js/auth.js": {
-   "sha256": "465b2aa37485219666654b558b3622c9a5a4a60962af0cd00e3aeb88e740190a",
-   "size": 27956
+   "sha256": "ae014d272feb268af3dba98b1dea5eab2c83696e382742dc06680f3c46ad7550",
+   "size": 27971
   },
   "js/docimport.js": {
    "sha256": "5f789ead3262b747352d4f7705817003459fb09418dd083d84c32fd8df134654",
    "size": 16393
   },
   "js/i18n.js": {
-   "sha256": "1d7c30fb64b22fc8dbd5ade43cd3c930c54f5ffc6e28cb1d469fa0346055c5c9",
-   "size": 81795
+   "sha256": "4322459e3f028d2b4a9ccab771ef17c6215fb75f81be4dd5b53f086220eaf228",
+   "size": 83418
   },
   "js/io.js": {
-   "sha256": "a5124f3ab4af3ab4d63f04f11cd986190ab4dcd81544130e53c8b4d14712de8e",
-   "size": 101934
+   "sha256": "b0ac5e751db78fc64a6d1bb40a1eef53a1a55a27c57e001198e5318713682193",
+   "size": 103422
   },
   "js/model.js": {
-   "sha256": "08e5923cf19bef677394cc77fdf04117397aa22ba4ff23c996ac90871af627b4",
-   "size": 23148
+   "sha256": "e877add86cbbcdf0adfd6f9816cbded1686b152f0682dba685488df09452868f",
+   "size": 23419
   },
   "js/render.js": {
-   "sha256": "45cc2832e1179c31d2966358b18eb4d45f90144d184a21c01a0102f5b73bd114",
-   "size": 71280
+   "sha256": "a67dc03bedee260e39422ecc9c1d8f76ef951d6fb1c841052e963f13de204761",
+   "size": 75809
   },
   "js/vendor/pdf.min.js": {
    "sha256": "5b5799e6f8c680663207ac5b42ee14eed2a406fa7af48f50c154f0c0b1566946",
@@ -90,5 +90,12 @@
    "sha256": "a8f3ba90c4c7b969fff476e6917c041868625544878c66b645f73cf41c44844a",
    "size": 1034
   }
+ },
+ "apk": {
+  "versionCode": 3,
+  "versionName": "1.2",
+  "path": "BFlatStudio.apk",
+  "sha256": "fb4f61a4d6e63a70deb151dd5d1d9b2c54665889a77d88d2b2832d73b4fc64fc",
+  "size": 1919133
  }
 }
