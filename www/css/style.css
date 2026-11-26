@@ -366,6 +366,14 @@ body.touch .btn, body.touch .chip, body.touch .pop-item { min-height: 36px; }
 .slur-bar .sb-title { width: 100%; text-align: center; font-size: 13px; font-weight: 600; color: var(--ink); }
 .slur-bar .sb-grp { display: inline-flex; align-items: center; gap: 4px; padding: 2px 4px; border-radius: 10px; border: 1px solid var(--line2); }
 .slur-bar .sb-grp b { font-size: 13px; min-width: 34px; text-align: center; }
+/* 음표 탭: 이음줄 그림 버튼 아래 작은 고치기 상자 */
+.btn.art .slur-ico { display: block; margin: 0 auto; }
+.slur-bar.anchored { right: auto; bottom: auto; margin: 0; gap: 5px; padding: 6px 8px; border-radius: 10px; max-width: min(460px, calc(100vw - 16px)); justify-content: flex-start; border-color: var(--blue); }
+.slur-bar.anchored::before { content: ''; position: absolute; top: -6px; left: calc(var(--tip, 24px) - 6px); width: 10px; height: 10px; background: var(--bar); border-left: 1px solid var(--blue); border-top: 1px solid var(--blue); transform: rotate(45deg); }
+.slur-bar.anchored .btn { min-height: 30px; min-width: 30px; font-size: 13px; padding: 3px 8px; }
+.slur-bar.anchored .sb-title { width: auto; text-align: left; font-size: 12px; margin-right: 2px; }
+.slur-bar.anchored .sb-grp b { font-size: 12px; min-width: 28px; }
+body.touch .slur-bar.anchored .btn { min-height: 40px; min-width: 40px; font-size: 15px; }
 body.slurbar-on #touchPad, body.slurbar-on #touchPadShow { display: none; }
 body.slurbar-on #scroller { padding-bottom: 190px; }
 @media (max-width: 760px) {
