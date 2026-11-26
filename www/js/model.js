@@ -199,7 +199,7 @@ function newScore(o) {
     type: SCORE_TYPES[o.type] ? o.type : 'single', staves,
     app: 'BFlat Studio', version: 1, title: o.title, composer: o.composer, lyricist: o.lyricist,
     time: { num: +o.num, den: +o.den }, key: +o.key, clef: o.clef, tempo: +o.tempo || null, tempoText: o.tempoText || '', swing: !!o.swing, lyricLines: +o.lyricLines,
-    lines: [], measures: [], slurs: []
+    lines: [], measures: [], slurs: [], lyrRest: true
   };
   for (let i = 0; i < o.lines; i++) { s.lines.push(+o.mpl); for (let j = 0; j < o.mpl; j++) s.measures.push(newMeasure()); }
   return s;
@@ -219,6 +219,7 @@ function fixIds(s) {
   });
   s.slurs = (s.slurs || []).filter(x => x.a && x.b);
   s.slurs.forEach(x => { if (!x.id) x.id = uid(); });
+  migrateLyricRests(s);
   // 줄 정보 보정
   let total = s.lines.reduce((a, b) => a + b, 0);
   if (total !== s.measures.length) {
@@ -324,6 +325,35 @@ function parseLyrics(text) {
   }
   flush();
   return out;
+}
+/** 가사 한 음절이 붙는 자리: 첫 줄 음표(붙임줄로 이어 받은 음은 빼고) · 쉼표도 한 자리 */
+function lyrSlot(n, tiedInto) { return !!n && (n.rest || (!!n.p && !tiedInto.has(n.id))); }
+/** 음절 목록 → 가사 글 (parseLyrics 로 다시 읽으면 똑같이 나와요) */
+function lyrTokensText(toks) {
+  while (toks.length && toks[toks.length - 1] === '') toks = toks.slice(0, -1);
+  const t = toks.map(x => x === '' || x === '_' || x === '-' ? x : (x.length > 1 && (HANGUL.test(x) || /[\s\-_\[\]]/.test(x))) ? `[${x}]` : x).join(' ');
+  return toks[0] === '' ? ' ' + t : t;
+}
+/** 예전 악보(쉼표를 가사 자리로 세지 않던 때) → 쉼표 자리에 빈 음절을 넣어 가사가 그대로 같은 음에 붙게 */
+function migrateLyricRests(s) {
+  if (s.lyrRest) return;
+  s.lyrRest = true;
+  const into = new Set((s.slurs || []).filter(x => x.type === 'tie').map(x => x.b));
+  s.measures.forEach(m => {
+    const notes = SNr(m, 0) || [];
+    if (!notes.some(n => n.rest)) return;
+    Object.keys(m.lyrics || {}).forEach(v => {
+      const old = parseLyrics(m.lyrics[v]);
+      if (!old.length) return;
+      const out = []; let k = 0;
+      notes.forEach(n => {
+        if (!lyrSlot(n, into) || k >= old.length) return;
+        if (n.rest) out.push(''); else out.push(old[k++]);
+      });
+      if (out.length === k) return;                 // 가사 앞에 쉼표가 없으면 그대로
+      m.lyrics[v] = lyrTokensText(out.concat(old.slice(k)));
+    });
+  });
 }
 
 /* ===== 코드 이름 ===== */
