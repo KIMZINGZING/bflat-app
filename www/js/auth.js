@@ -17,6 +17,39 @@ const Auth = {
       if (keep && keep.email) localStorage.setItem(this.KEY + '.last', keep.email);
       if (a) localStorage.setItem(this.KEY, JSON.stringify(a)); else localStorage.removeItem(this.KEY);
     } catch (e) { }
+    this.mirror();
+  },
+
+  /* ---------- 앱 자체에도 백업: 업데이트로 웹 저장공간이 비어도 로그인 유지 ----------
+   * PC 프로그램: %APPDATA%\BFlat Studio\account.dat (윈도우 계정으로 암호화) · 안드로이드: 앱 전용 저장소
+   * 지워지는 때: 로그아웃 · 회원 탈퇴 · 앱 삭제 (안드로이드는 앱을 지우면 같이 지워져요) */
+  nativeApi(wait) {
+    const now = () => {
+      const ab = window.AndroidBridge; if (ab && ab.authLoad) return { android: true, b: ab };
+      const n = window.pywebview && window.pywebview.api; return n && n.auth_load ? { android: false, b: n } : null;
+    };
+    const got = now();
+    // PC 프로그램은 화면이 뜬 조금 뒤에 연결돼요 (127.0.0.1:5179) → 잠깐 기다려요
+    if (got || !wait || !(window.pywebview || /^(127\.0\.0\.1|localhost)$/.test(location.hostname))) return Promise.resolve(got);
+    return new Promise(res => {
+      const t = setTimeout(() => res(now()), wait);
+      window.addEventListener('pywebviewready', () => { clearTimeout(t); res(now()); }, { once: true });
+    });
+  },
+  /** 지금 기억한 계정(없으면 빈 값)을 앱 쪽 백업에 똑같이 써요 */
+  async mirror() {
+    const n = await this.nativeApi(8000); if (!n) return;
+    let s = ''; try { s = localStorage.getItem(this.KEY) || ''; } catch (e) { }
+    try { if (n.android) n.b.authSave(s); else await n.b.auth_save(s); } catch (e) { }
+  },
+  /** 웹 저장공간에 계정이 없을 때: 앱 쪽 백업에서 되살리기 */
+  async restore() {
+    const n = await this.nativeApi(2500); if (!n) return null;
+    let s = ''; try { s = n.android ? n.b.authLoad() : await n.b.auth_load(); } catch (e) { }
+    let a = null; try { a = JSON.parse(s || 'null'); } catch (e) { }
+    if (!a || !a.email || !a.refreshToken) return null;
+    try { localStorage.setItem(this.KEY, JSON.stringify(a)); localStorage.setItem(this.KEY + '.last', a.email); } catch (e) { }
+    return a;
   },
   /** 로그아웃한 뒤에도 로그인 칸에 넣어 둘 마지막 이메일 */
   lastEmail() { const a = this.get(); if (a) return a.email; try { return localStorage.getItem(this.KEY + '.last') || ''; } catch (e) { return ''; } },
@@ -80,6 +113,14 @@ const Auth = {
   gate(next) {
     if (!this.on()) { next(); return; }
     const a = this.get();
+    if (a) { this.mirror(); this.go(a, next); return; }        // 예전 버전에서 로그인한 것도 앱 쪽에 백업
+    // 웹 저장공간이 비었으면(업데이트 등) 앱 쪽 백업에서 되살려요 → 그래도 없을 때만 가입·로그인 화면
+    this.restore().then(r => {
+      this.go(r, next);
+      if (r && r.verified && typeof Cloud !== 'undefined') Cloud.soon(800);
+    });
+  },
+  go(a, next) {
     if (a && a.verified) { next(); this.recheck(); return; }    // 인터넷이 없어도 바로 시작 · 뒤에서 계정 확인
     this.show(a ? 'verify' : 'signup', next);
   },
