@@ -247,6 +247,76 @@ body.touch .ed-ok { padding: 7px 12px; font-size: 14px; }
 .lib-item.cur { border-color: var(--blue); }
 .lib-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .lib-main b { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* 내 악보함 목록 (가나다 묶음) */
+.lc-modal { width: 680px; position: relative; display: flex; flex-direction: column; }
+.lc-top { display: flex; gap: 8px; align-items: stretch; margin-bottom: 8px; }
+.lc-search { flex: 1; display: flex; align-items: center; gap: 8px; background: var(--seg); border: 1px solid var(--line2); border-radius: 10px; padding: 0 12px; color: var(--muted); min-width: 0; }
+.lc-search input { flex: 1; min-width: 0; border: 0; outline: 0; background: transparent; padding: 9px 0; font-size: 14.5px; color: var(--ink); }
+.lc-search:focus-within { border-color: var(--blue); }
+.lc-modal .lib-cloud { margin: 0 0 6px; }
+.lc-wrap { display: flex; gap: 8px; min-height: 0; }
+.lc-idx { flex: none; display: flex; flex-direction: column; gap: 1px; padding-top: 2px; font-size: 12px; color: var(--muted); user-select: none; }
+.lc-idx span { width: 24px; height: 20px; display: flex; align-items: center; justify-content: center; border-radius: 6px; cursor: pointer; }
+.lc-idx span:hover:not(.off) { background: var(--seg); color: var(--ink); }
+.lc-idx span.on { background: var(--blue); color: #fff; font-weight: 700; }
+.lc-idx span.off { opacity: .3; cursor: default; }
+.lc-list { flex: 1; min-width: 0; max-height: 52vh; overflow-y: auto; position: relative; padding-right: 2px; }
+.lc-h { font-size: 13px; font-weight: 700; color: var(--blue); padding: 10px 4px 4px; border-bottom: 1px solid var(--line2); position: sticky; top: 0; background: var(--card); z-index: 1; }
+.lc-row { display: flex; align-items: center; gap: 10px; padding: 8px 6px; border-radius: 8px; cursor: pointer; flex-wrap: wrap; }
+.lc-row:hover { background: var(--hover); }
+.lc-row.cur { background: var(--blue-l); }
+.lc-row b { flex: 1; min-width: 0; font-size: 15.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lc-row .who { font-size: 12.5px; color: var(--blue-d); background: rgba(75,141,248,.14); border-radius: 99px; padding: 2px 9px; white-space: nowrap; max-width: 34%; overflow: hidden; text-overflow: ellipsis; }
+:root:not([data-theme="dark"]) .lc-row .who { color: var(--blue); background: var(--blue-l); }
+:root[data-theme="dark"] .lc-row .who { color: #9fc0ff; }
+.lc-row .n, .lc-row .d { font-size: 12px; color: var(--muted); white-space: nowrap; text-align: right; }
+.lc-row .n { width: 46px; }
+.lc-row .d { width: 66px; }
+.lc-row .lc-more { min-width: 30px; height: 30px; padding: 0; border-color: transparent; background: transparent; color: var(--muted); }
+.lc-row .lc-more:hover { background: var(--seg); color: var(--ink); }
+.lc-note { width: 100%; font-size: 11.5px; color: var(--muted); padding-left: 2px; }
+.lc-empty { padding: 24px 8px; text-align: center; }
+.lc-foot { display: flex; align-items: center; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
+.lc-foot .lib-bar { flex: 0 0 140px; height: 6px; }
+.lc-menu { position: absolute; z-index: 5; background: var(--card); border: 1px solid var(--line2); border-radius: 10px; box-shadow: 0 10px 30px rgba(0,0,0,.3); padding: 5px; display: flex; flex-direction: column; min-width: 150px; }
+.lc-menu button { border: 0; background: transparent; text-align: left; padding: 8px 10px; border-radius: 7px; cursor: pointer; font-size: 14px; }
+.lc-menu button:hover { background: var(--blue-l); }
+.lc-menu button.red { color: var(--red); }
+body.touch .lc-row { padding: 10px 6px; }
+body.touch .lc-idx span { height: 24px; }
+/* 휴대폰 세로: 검색 칸은 한 줄 전체 · 곡목은 윗줄 전체, 작곡가·마디·날짜·⋯ 는 아랫줄 */
+@media (max-width: 560px) {
+  .lc-modal { padding: 16px 12px 12px; }
+  .lc-top { flex-wrap: wrap; }
+  .lc-search { flex: 1 1 100%; }
+  .lc-top .btn { flex: 1 1 auto; }
+  .lc-row { gap: 4px 8px; padding: 9px 4px; }
+  .lc-row b { flex: 1 1 100%; white-space: normal; line-height: 1.3; }
+  .lc-row .who { max-width: 55%; }
+  .lc-row .n { width: auto; margin-left: auto; }
+  .lc-row .d { width: auto; }
+  .lc-list { max-height: 58vh; }
+  .lc-foot .lib-bar { flex-basis: 90px; }
+}
+/* 악보 합치기 · 순서 바꾸기 */
+.merge-modal { width: 600px; }
+.mg-list { list-style: none; margin: 0 0 10px; padding: 0; display: flex; flex-direction: column; gap: 6px; max-height: 40vh; overflow-y: auto; }
+.mg-item { display: flex; align-items: center; gap: 6px; padding: 8px 10px; border: 1px solid var(--line2); border-radius: 10px; background: var(--card); }
+.mg-no { flex: none; width: 26px; height: 26px; border-radius: 50%; background: var(--blue); color: #fff; font-weight: 700; display: flex; align-items: center; justify-content: center; font-size: 13px; }
+.mg-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.mg-main b { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mg-empty { padding: 14px; text-align: center; border: 1px dashed var(--line2); border-radius: 10px; }
+.mg-add { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-bottom: 10px; }
+.mg-add .btn[hidden] { display: none; }
+.mg-lib { border: 1px solid var(--line2); border-radius: 10px; padding: 6px; margin-bottom: 12px; max-height: 30vh; overflow-y: auto; display: flex; flex-direction: column; gap: 4px; }
+.mg-lib[hidden] { display: none; }
+.mg-lib-row { display: flex; align-items: center; gap: 8px; padding: 4px 6px; border-radius: 8px; }
+.mg-lib-row:hover { background: var(--seg); }
+.mg-lib-row > span:first-child { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* 휴지통 */
+.trash-modal { width: 600px; }
+.lib-item.trashed { opacity: .92; }
+.lib-item .days { font-size: 12px; color: var(--red, #dc2626); white-space: nowrap; }
 /* 설정: 휴대폰 앱 업데이트 */
 .pub-steps { margin: 0 0 12px; padding-left: 20px; line-height: 1.7; }
 .pub-steps a, [data-link] { color: var(--blue); }
@@ -399,6 +469,43 @@ body.slurbar-on #scroller { padding-bottom: 190px; }
   .pdf-resizer { display: none; }
   #status .by { display: none; }
 }
+
+/* ---------- 숨긴 원본(PDF·사진) 다시 보기 버튼 ---------- */
+#pdfShow { position: fixed; left: 10px; bottom: 44px; z-index: 40; height: 40px; padding: 0 14px; border-radius: 20px; border: 1px solid var(--blue); background: var(--bar); color: var(--ink); font-size: 14px; font-weight: 700; box-shadow: 0 4px 16px rgba(0,0,0,.25); touch-action: manipulation; cursor: pointer; }
+#pdfShow[hidden], body.blank:not(.pdf-only) #pdfShow, body.auth-open #pdfShow { display: none; }
+
+/* ---------- 휴대폰·태블릿 세로: 원본은 화면 전체로 띄웠다가 ✕ = 숨기기 ---------- */
+body.touch.port #pdfPanel { position: fixed; inset: 0; width: 100% !important; max-width: none; z-index: 30; border-left: 0; }
+body.touch.port .pdf-resizer { display: none; }
+body.touch.port.pdf-open #touchPad, body.touch.port.pdf-open #touchPadShow, body.touch.port.pdf-open .slur-bar { display: none; }
+
+/* ---------- 휴대폰·태블릿 가로: 원본 반 · 악보 반 (PC 처럼) + 위 막대 한 줄 ---------- */
+body.touch.land #pdfPanel { position: relative; inset: auto; width: var(--pdfw, 50%) !important; min-width: 200px; max-width: 70%; z-index: auto; border-left: 1px solid var(--line); }
+body.touch.land .pdf-resizer { display: block; left: -8px; width: 16px; }
+body.touch.land .pdf-head { padding: 3px 6px; gap: 4px; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
+body.touch.land .pdf-head .btn { min-height: 30px; padding: 2px 8px; font-size: 12.5px; flex-shrink: 0; }
+body.touch.land .pdf-name { font-size: 12.5px; }
+/* 위 막대: 파일 · 도구 · 모드 탭만 한 줄 (↶ ↷ 는 작게) */
+body.touch.land #topbar { flex-wrap: nowrap; min-height: 0; padding: 3px 6px; gap: 3px; overflow-x: auto; scrollbar-width: none; }
+body.touch.land #topbar > .grow, body.touch.land #topbar .zoom, body.touch.land #btnPlay, body.touch.land #topbar [data-act="rewind"],
+body.touch.land #topbar [data-act="menuHelp"], body.touch.land #topbar [data-act="settings"] { display: none; }
+body.touch.land #topbar .btn { min-height: 32px; padding: 2px 8px; font-size: 13px; }
+body.touch.land #topbar .btn.icon { min-width: 32px; padding: 2px 4px; }
+body.touch.land #modes { order: 0; width: auto; margin: 0 auto; padding: 2px; flex: 0 1 auto; min-width: 0; overflow-x: auto; scrollbar-width: none; }
+body.touch.land #modes button { padding: 5px 8px; font-size: 13px; flex: 0 0 auto; }
+body.touch.land #modes button small { display: none; }
+/* 아래 줄: 설명은 빼고 그 모드에서 쓰는 버튼만 한 줄 (넘치면 옆으로 밀어서) */
+body.touch.land #subbar { min-height: 0; padding: 3px 6px; gap: 4px; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
+body.touch.land #subbar > * { flex-shrink: 0; }
+body.touch.land #subbar .hint, body.touch.land #subbar .sep, body.touch.land #subbar > .grow,
+body.touch.land #subbar [data-act="fillAll"], body.touch.land #subbar [data-act="fillWorked"], body.touch.land #subbar [data-act="toMeasure"],
+body.touch.land #subbar .chk-beats, body.touch.land #subbar .chk-empty { display: none; }
+body.touch.land #subbar .btn, body.touch.land #subbar select.btn { min-height: 32px; padding: 2px 8px; font-size: 13px; }
+body.touch.land #subbar .btn.mus { min-width: 34px; font-size: 17px; }
+body.touch.land #status { display: none; }
+body.touch.land #subbar:not(:has(.btn, select, input)) { display: none; }   /* 설명만 있는 모드(마디선·송폼)는 줄 자체를 숨겨요 */
+body.touch.land #pdfShow, body.touch.land #touchPadShow { bottom: 10px; }
+body.touch.land #touchPad { bottom: 10px; }
 
 /* ===== 회원 가입 · 로그인 (js/auth.js) ===== */
 #authRoot { position: fixed; inset: 0; z-index: 1000; background: var(--bg); display: flex; align-items: center; justify-content: center; padding: 16px; overflow-y: auto; }
