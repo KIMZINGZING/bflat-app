@@ -7,12 +7,13 @@ const FORMS = ['Intro', 'Verse', 'Pre-Chorus', 'Chorus', 'Bridge', 'Interlude', 
 const DYNS = ['ppp', 'pp', 'p', 'mp', 'mf', 'f', 'ff', 'fff'];
 const ARTS = [['accent', '>', '악센트'], ['staccato', '·', '스타카토'], ['tenuto', '–', '테누토'], ['marcato', '^', '마르카토'], ['fermata', '𝄐', '늘임표'], ['x', '✕', '박자치기 (X 머리 · 손뼉·말하듯 리듬만)']];
 const DUR_GLYPH = { w: '𝅝', h: '𝅗𝅥', q: '♩', e: '♪', s: '𝅘𝅥𝅯' };
+const MAX_VERSES = 10;   // 가사 절은 10절까지
 
 const App = {
   s: null, ctxs: [], lay: null, mode: 'note', write: false, sel: [], anchor: null,
   selMeasures: [], mAnchor: null, curDur: 'q', zoom: 1, verse: 0, playStart: { m: 0, t: 0 },
   selSlur: null, selBar: null, widthEdit: false, chordEdit: null, hoverMeasure: null, clipboard: null,
-  fileHandle: null, drag: null,
+  fileHandle: null, drag: null, lyrUnit: 'measure',
   settings: { chordAccomp: false, timbre: 'piano', volume: .8, scoreFont: 'main', theme: 'dark', paper: 'cream', paperAlpha: 1, winAlpha: 1, lang: 'ko' }
 };
 
@@ -80,7 +81,7 @@ function render() {
   const s = App.s;
   App.ctxs = computeContexts(s);
   // 쉬는 마디 여러 개 = 한 마디에 숫자로 (마디 편집 모드에서는 하나하나 펼쳐서 고칠 수 있게)
-  const lopt = { noMr: App.mode === 'measure' };
+  const lopt = { noMr: App.mode === 'measure', lyrAll: App.mode === 'lyric' };
   App.lay = computeLayout(s, App.ctxs, lopt);
   // 한 줄에 다 안 들어가면(마디 여백을 줄여도 음표·가사·계이름이 겹치면) 그 줄을 나눠요
   //  (조옮김으로 ♭·♯ 계이름이 넓어졌을 때, 계이름을 켰을 때, 음표를 많이 넣었을 때)
@@ -133,6 +134,7 @@ function updateStatus() {
   const tb = $('#bTieToggle'); if (tb) { const sl = S().slurs.find(x => x.id === App.selSlur); tb.disabled = !sl; tb.textContent = sl && sl.type === 'tie' ? '이음줄로 바꾸기' : '붙임줄로 바꾸기'; }
   const td = $('#bSlurDel'); if (td) td.disabled = !App.selSlur;
   $$('[data-verse]').forEach(b => b.classList.toggle('on', +b.dataset.verse === App.verse));
+  $$('[data-lyrunit]').forEach(b => b.classList.toggle('on', b.dataset.lyrunit === App.lyrUnit));
   const we = $('#bWidthEdit'); if (we) we.classList.toggle('on', App.widthEdit);
   $$('.need-msel').forEach(b => b.disabled = !App.selMeasures.length);
   $('[data-act="undo"]').disabled = !History.stack.length;
@@ -200,8 +202,13 @@ function buildSubbar() {
     h = `<div class="hint one">마디 위 점(또는 점 사이 빈 곳 = 가장 가까운 반 박)을 클릭해 코드 입력 · Enter = 저장 · Space = 반 박씩 옮기기 · Tab = 다음 점 · 빈칸으로 저장 = 지우기</div>`;
   } else if (m === 'lyric') {
     const n = S().lyricLines || 1;
-    h = `<div class="hint one">마디 클릭 → 그 마디 가사 ([두근]처럼 묶으면 한 음에 두 글자 · _ = 한 음 건너뛰기 · 띄어쓰기 두 칸 = 빈 음 · - = 한 음) · Enter = 다음 마디 · 가사 줄 수는 곡 정보에서</div>
-    ${n > 1 ? `<div class="seg">${Array.from({ length: n }, (_, k) => `<button class="btn" data-verse="${k}">${k + 1}절</button>`).join('')}</div>` : ''}`;
+    h = `<div class="hint">절 칸(1절·2절…)을 눌러 그 절 가사 쓰기 · 빈 칸은 비워 두면 안 나와요 (후렴처럼 1절만 쓰는 줄) · 음표 머리·쉼표 하나 = 한 음절 · 붙임줄·이음줄로 이어진 음 = - · [두근] = 한 음에 두 글자 · _ = 한 음 건너뛰기 · 띄어쓰기 두 칸 = 빈 음 · 줄씩 쓸 때 | = 다음 마디</div>
+    <div class="seg">${Array.from({ length: n }, (_, k) => `<button class="btn" data-verse="${k}">${k + 1}절</button>`).join('')}</div>
+    <button class="btn" data-act="verseAdd" title="절 하나 더 (모든 줄에 빈 칸이 생겨요)"${n >= MAX_VERSES ? ' disabled' : ''}>＋ 절 추가</button>
+    <button class="btn" data-act="verseDel" title="지금 고른 절을 지워요 (Ctrl+Z 로 되돌리기)"${n <= 1 ? ' disabled' : ''}>− 이 절 지우기</button>
+    <span class="sep"></span>
+    <span class="mini">입력 칸</span>
+    <div class="seg"><button class="btn" data-lyrunit="measure" title="마디 하나씩 입력 · Enter = 다음 마디">마디씩</button><button class="btn" data-lyrunit="line" title="한 줄(여러 마디)을 한 번에 입력 · 음표 수대로 마디에 나눠 넣어요 · | 로 마디를 직접 나눌 수도 있어요 · Enter = 다음 줄">줄씩</button></div>`;
   } else if (m === 'form') {
     h = `<div class="hint one">마디 위쪽 클릭 → Intro, Verse, Chorus … (직접 입력도 돼요)</div>`;
   } else if (m === 'measure') {
@@ -1234,7 +1241,13 @@ function onMouseDown(e) {
     return;
   }
   if (m === 'chord') { if (h.g) { const c = App.ctxs[h.mi]; const half = (isCompound(c) ? 72 : c.beat) / 2; let t = Math.round(h.t / half) * half; if (t >= c.cap) t = c.cap - half; openChordEditor(h.mi, Math.max(0, t)); } return; }
-  if (m === 'lyric') { if (h.g) openLyricEditor(h.mi); return; }
+  if (m === 'lyric') {
+    if (!h.g) return;
+    // 오선 아래 절 칸을 누르면 그 절로 바꿔요 (오선 위를 누르면 지금 고른 절 그대로)
+    const row = lyrRowAt(h.sys, p.y);
+    if (row >= 0 && App.verse !== h.sys.verses[row]) { App.verse = h.sys.verses[row]; render(); }
+    openLyricEditor(h.mi); return;
+  }
   if (m === 'form') { if (h.g) formMenu(h.mi, e.clientX, e.clientY); return; }
   if (m === 'measure') {
     if (App.widthEdit && h.bar !== null) {
@@ -1773,7 +1786,118 @@ function openChordEditor(mi, t) {
     else if (e.key === 'Tab') { e.preventDefault(); const next = e.shiftKey ? (t % beat ? -(t % beat) : -beat) : (beat - (t % beat)); move(next); }
   });
 }
+/** 가사 칸 줄(row) 찾기: y 가 몇 번째 절 칸인지 (-1 = 칸 밖 · 오선 위 등) */
+function lyrRowAt(sys, y) {
+  if (!sys || !sys.verses.length) return -1;
+  const row = Math.floor((y - (lyrRowY(sys, 0) - 15)) / 21);
+  return row >= 0 && row < sys.verses.length ? row : -1;
+}
+/** 절 추가 · 지우기 (절은 마디마다 m.lyrics[절] 에 따로 있어요 · 빈 절 칸은 악보에 안 나와요) */
+function verseAdd() {
+  const s = S(), n = s.lyricLines || 1;
+  if (n >= MAX_VERSES) return toast(LG(`가사는 ${MAX_VERSES}절까지 넣을 수 있어요`, `Up to ${MAX_VERSES} verses`, `歌詞は${MAX_VERSES}番まで`));
+  closeEditors();
+  commit(() => { s.lyricLines = n + 1; });
+  App.verse = n;
+  buildSubbar(); render();
+  toast(LG(`${n + 1}절 칸을 만들었어요 · 줄마다 ${n + 1}절 칸을 눌러 쓰세요 (안 쓴 줄은 악보에 안 나와요)`, `Added verse ${n + 1} · click its row on each line (rows left empty are not printed)`, `${n + 1}番を追加しました · 各段の${n + 1}番の欄をクリック (空の段は表示されません)`));
+}
+function verseDel() {
+  const s = S(), n = s.lyricLines || 1, v = App.verse;
+  if (n <= 1) return;
+  closeEditors();
+  commit(() => {
+    s.measures.forEach(m => {
+      const L2 = {};
+      Object.keys(m.lyrics || {}).forEach(k => { const kk = +k; if (kk < v) L2[kk] = m.lyrics[k]; else if (kk > v) L2[kk - 1] = m.lyrics[k]; });
+      m.lyrics = L2;
+    });
+    s.lyricLines = n - 1;
+  });
+  App.verse = Math.min(v, n - 2);
+  buildSubbar(); render();
+  toast(LG(`${v + 1}절을 지웠어요 (뒤 절은 한 칸씩 앞으로) · Ctrl+Z = 되돌리기`, `Deleted verse ${v + 1} (later verses moved up) · Ctrl+Z = undo`, `${v + 1}番を削除しました · Ctrl+Z = 元に戻す`));
+}
+/** 줄 단위 가사: 한 줄 글 → 마디마다 나누기
+ *  - | 가 있으면 | 로 마디를 나눠요 (마디 하나씩 그대로)
+ *  - 없으면 음표·쉼표 자리 수대로 앞 마디부터 채우고 남는 건 마지막 마디로 */
+function splitLineLyrics(text, slots) {
+  const n = slots.length;
+  if (text.includes('|')) {
+    const seg = text.split('|').map(x => x.replace(/^ /, '').trimEnd());
+    const out = seg.slice(0, n);
+    if (seg.length > n) out[n - 1] = [out[n - 1], ...seg.slice(n)].filter(Boolean).join(' ');
+    while (out.length < n) out.push('');
+    return out;
+  }
+  const toks = parseLyrics(text), out = [];
+  let k = 0;
+  slots.forEach((c, j) => { const take = j === n - 1 ? toks.slice(k) : toks.slice(k, k + c); k += take.length; out.push(take.length ? lyrTokensText(take) : ''); });
+  return out;
+}
+/** 한 줄의 가사 글 (마디 사이 = ' | ' · 뒤쪽 빈 마디는 빼요) — splitLineLyrics 로 다시 나누면 똑같이 나와요 */
+function lineLyricsText(idxs, v) {
+  const seg = idxs.map(i => S().measures[i].lyrics[v] || '');
+  while (seg.length && !seg[seg.length - 1].trim()) seg.pop();
+  return seg.join(' | ');
+}
+/** 줄 단위 가사 칸: 한 줄(여러 마디)을 한 번에 · Enter = 다음 줄 */
+function openLyricLineEditor(mi) {
+  closeEditors();
+  const g0 = App.lay.meas[mi]; if (!g0) return;
+  const sys0 = g0.sys, idxs = sys0.idxs.slice(), v = App.verse;
+  const sysNo = App.lay.systems.indexOf(sys0);
+  const slots = idxs.map(i => S().measures[i].notes.filter(n => lyrSlot(n, App.lay.tied.noSyl)).length);
+  const total = slots.reduce((a, b) => a + b, 0);
+  const a = idxs[0] + 1, b = idxs[idxs.length - 1] + 1;
+  const box = document.createElement('div');
+  box.className = 'editor lyric-ed line';
+  box.innerHTML = `<div class="ed-label">${LG(`${sysNo + 1}번째 줄 (${a}–${b}마디) · ${v + 1}절 · 음표·쉼표 ${total}개`, `Line ${sysNo + 1} (m.${a}–${b}) · verse ${v + 1} · ${total} notes/rests`, `${sysNo + 1}段目 (${a}–${b}小節) · ${v + 1}番 · 音符・休符 ${total}個`)} <span class="cnt"></span> <span class="muted">${LG('· | = 다음 마디로', '· | = next measure', '· | = 次の小節へ')}</span></div><div class="ed-row"><input value="${esc(lineLyricsText(idxs, v))}" placeholder="${LG('이 줄 가사를 한꺼번에 (예: 참 반 가 운 신 앙 소 식)', 'Lyrics for the whole line (e.g. a-ma-zing grace how sweet)', 'この段の歌詞をまとめて')}" spellcheck="false"><button class="ed-ok" tabindex="-1">${LG('입력', 'OK', '入力')}</button></div>`;
+  box._place = () => {
+    const g = App.lay.meas[idxs[0]]; if (!g) return false;
+    const pg = $(`.page[data-page="${g.page}"]`); if (!pg) return false;
+    if (box.parentNode !== pg) pg.appendChild(box);
+    const z = App.zoom, rowIdx = Math.max(0, g.sys.verses.indexOf(v));
+    box.style.left = (g.x + 2) * z + 'px';
+    box.style.top = (lyrRowY(g.sys, rowIdx) - 15) * z + 'px';
+    box.style.width = Math.max(320, (g.sys.x1 - g.x - 4) * z) + 'px';
+    return true;
+  };
+  box._place();
+  const inp = box.querySelector('input'), cnt = box.querySelector('.cnt');
+  box.querySelector('.ed-ok').addEventListener('mousedown', e => { e.preventDefault(); save(); box._save = null; box.remove(); render(); });
+  const upd = () => {
+    const parts = splitLineLyrics(inp.value, slots);
+    const over = parts.some((t, j) => parseLyrics(t).length > slots[j]);
+    const k = parts.reduce((acc, t) => acc + parseLyrics(t).length, 0);
+    cnt.textContent = LG(`· 음절 ${k}개`, `· ${k} syllables`, `· 音節 ${k}個`); cnt.style.color = over ? '#dc2626' : '';
+  };
+  upd(); inp.addEventListener('input', upd);
+  inp.focus(); inp.setSelectionRange(inp.value.length, inp.value.length);
+  let saved = false;
+  const save = () => {
+    if (saved) return; saved = true;
+    const parts = splitLineLyrics(inp.value.trimEnd(), slots);
+    if (idxs.every((i, j) => (S().measures[i].lyrics[v] || '') === parts[j])) return;
+    History.push(S());
+    idxs.forEach((i, j) => { const m = S().measures[i]; if (parts[j]) m.lyrics[v] = parts[j]; else delete m.lyrics[v]; });
+    changed(true);
+  };
+  box._save = save;
+  const go = d => {
+    save(); box._save = null; box.remove(); render();
+    const ns = App.lay.systems[sysNo + d];
+    if (ns) { openLyricLineEditor(ns.idxs[0]); scrollToMeasure(ns.idxs[0]); }
+  };
+  inp.addEventListener('keydown', e => {
+    e.stopPropagation();
+    if (e.key === 'Enter' || (e.key === 'Tab' && !e.shiftKey)) { e.preventDefault(); go(1); }
+    else if (e.key === 'Tab' && e.shiftKey) { e.preventDefault(); go(-1); }
+    else if (e.key === 'Escape') { saved = true; box.remove(); render(); }
+  });
+}
 function openLyricEditor(mi) {
+  if (App.lyrUnit === 'line') return openLyricLineEditor(mi);
   closeEditors();
   const g = App.lay.meas[mi];
   const m = S().measures[mi];
@@ -1789,7 +1913,7 @@ function openLyricEditor(mi) {
     if (box.parentNode !== pg) pg.appendChild(box);
     const z = App.zoom, rowIdx = Math.max(0, g.sys.verses.indexOf(v));
     box.style.left = (g.x + 2) * z + 'px';
-    box.style.top = (g.staffTop + 4 * L.SP + 10 + rowIdx * 21) * z + 'px';
+    box.style.top = (lyrRowY(g.sys, rowIdx) - 15) * z + 'px';
     box.style.width = Math.max(220, (g.w - 4) * z) + 'px';
     return true;
   };
@@ -2053,7 +2177,7 @@ function newScoreDialog(startup, type, edit, parts) {
   <div class="row4">
   <label class="fld">${edit ? '조표 <span class="muted small">(음 높이는 그대로)</span>' : '조표'}<select class="inp" id="nKey">${keyOptions(v.key)}</select></label>
   <label class="fld">템포 (♩=)<input class="inp" id="nTempo" type="number" min="10" max="400" value="${v.tempo}" placeholder="미정"></label>
-  <label class="fld">가사 줄 수<select class="inp" id="nLL">${[1, 2, 3, 4, 5, 6].map(n => `<option value="${n}"${n === v.ll ? ' selected' : ''}>${n}줄</option>`).join('')}</select></label></div>
+  <label class="fld">가사 줄 수<select class="inp" id="nLL">${Array.from({ length: Math.max(MAX_VERSES, v.ll) }, (_, k) => k + 1).map(n =>`<option value="${n}"${n === v.ll ? ' selected' : ''}>${n}줄</option>`).join('')}</select></label></div>
   ${tempoTermField('nTerm', v.term)}
   ${loss ? `<p class="warn">이 종류에는 없는 줄의 음표 ${loss}개가 사라져요. 남기려면 먼저 저장하세요.</p>` : ''}
   ${!startup && !edit ? '<p class="warn">지금 악보 대신 새 악보를 열어요. 남기려면 먼저 저장하세요.</p>' : ''}
@@ -2412,7 +2536,7 @@ const Lib = {
   },
   async save(s, id) {
     const gz = await gzipText(JSON.stringify(s));
-    const meta = { name: s.title || LG('제목 없음', 'Untitled', '無題'), measures: s.measures.length };
+    const meta = { name: s.title || LG('제목 없음', 'Untitled', '無題'), measures: s.measures.length, composer: s.composer || '' };
     const r = await this.saveRaw(meta, gz, id);
     if (r && !r.error && typeof Cloud !== 'undefined') Cloud.soon();      // 계정의 다른 기기로 (내 악보함 연동)
     return r;
@@ -2427,6 +2551,9 @@ const Lib = {
     if (cur.used - (old ? old.size : 0) + gz.length > LIB_LIMIT) return { error: 'full', used: cur.used, limit: LIB_LIMIT };
     // 바꾼 시각은 늘 앞으로만 (기기 시계가 뒤로 가도 "바뀜"이 사라지지 않게)
     const it = { id: old ? old.id : (id && /^[\w-]{1,40}$/.test(id) ? id : Math.random().toString(16).slice(2, 14)), name: meta.name, measures: meta.measures, updated: meta.updated || Math.max(Date.now(), old ? old.updated + 1 : 0), size: gz.length, owner: meta.owner || '', data: gz };
+    // 작곡가 (내 악보함 목록에 보여요) · 안 주면 예전 값 그대로
+    const comp = meta.composer !== undefined ? meta.composer : old ? old.composer : undefined;
+    if (comp !== undefined) it.composer = comp || '';
     await this.idb('readwrite', st => st.put(it));
     const { data, ...m } = it; return m;
   },
@@ -2436,8 +2563,14 @@ const Lib = {
     const it = await this.idb('readonly', st => st.get(id)); return it ? it.data : null;
   },
   async load(id) { return JSON.parse(await gunzipBytes(await this.loadRaw(id))); },
-  /** sync = 다른 기기에서 지워진 것을 따라 지울 때 (다시 알리지 않아요) */
+  /** sync = 다른 기기에서 지워진 것을 따라 지울 때 (다시 알리지 않아요)
+   *  지운 악보는 바로 사라지지 않고 휴지통으로 (30일 동안 되살리기 · 휴지통 비우기) */
   async del(id, sync) {
+    try {
+      const gz = await this.loadRaw(id);
+      const meta = (await this.list()).items.find(it => it.id === id);
+      if (gz && meta) await Trash.put(meta, gz);
+    } catch (e) { console.error('휴지통에 넣지 못했어요', e); }
     const api = this.native();
     if (api) await api.lib_delete(id); else await this.idb('readwrite', st => st.delete(id));
     if (!sync && typeof Cloud !== 'undefined') { Cloud.markDeleted(id); Cloud.soon(); }
@@ -2446,11 +2579,89 @@ const Lib = {
   async rename(id, name) {
     const s = await this.load(id);
     s.title = name;
-    await this.saveRaw({ name, measures: s.measures.length }, await gzipText(JSON.stringify(s)), id);
+    await this.saveRaw({ name, measures: s.measures.length, composer: s.composer || '' }, await gzipText(JSON.stringify(s)), id);
     if (typeof App !== 'undefined' && App.libId === id && App.s) { App.s.title = name; if (Native()) Native().set_title(name); render(); }
     if (typeof Cloud !== 'undefined') Cloud.soon();
   },
 };
+/* ---------- 내 악보함 휴지통 ----------
+ * 지운 악보를 30일 동안 보관해요 (이 기기 저장공간 · IndexedDB) → 되살리기 · 완전히 지우기 · 휴지통 비우기
+ * 30일이 지난 것은 내 악보함·휴지통을 열 때 저절로 지워져요 */
+const TRASH_DAYS = 30, DAY_MS = 86400000;
+const Trash = {
+  _db: null,
+  db() {
+    if (this._db) return this._db;
+    this._db = new Promise((res, rej) => { const r = indexedDB.open('bflat-trash', 1); r.onupgradeneeded = () => r.result.createObjectStore('items', { keyPath: 'tid' }); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); });
+    return this._db;
+  },
+  async idb(mode, fn) { const db = await this.db(); return new Promise((res, rej) => { const tx = db.transaction('items', mode); const st = tx.objectStore('items'); const r = fn(st); tx.oncomplete = () => res(r && 'result' in r ? r.result : undefined); tx.onerror = () => rej(tx.error); }); },
+  async put(meta, gz) {
+    const now = Date.now();
+    await this.idb('readwrite', st => st.put({ tid: `${meta.id}-${now}`, id: meta.id, name: meta.name, composer: meta.composer || '', measures: meta.measures, size: gz.length, owner: meta.owner || '', deleted: now, data: gz }));
+  },
+  async purge() {
+    const cut = Date.now() - TRASH_DAYS * DAY_MS;
+    const all = await this.idb('readonly', st => st.getAll()) || [];
+    const old = all.filter(it => it.deleted < cut);
+    if (old.length) await this.idb('readwrite', st => old.forEach(it => st.delete(it.tid)));
+    return old.length;
+  },
+  async list() {
+    await this.purge();
+    const all = await this.idb('readonly', st => st.getAll()) || [];
+    const items = all.map(({ data, ...m }) => m).sort((a, b) => b.deleted - a.deleted);
+    return { items, used: items.reduce((a, it) => a + (it.size || 0), 0) };
+  },
+  async count() { try { return (await this.list()).items.length; } catch (e) { return 0; } },
+  /** 되살리기: 내 악보함에 다시 (같은 id 가 이미 있으면 새 id 로 · 계정의 다른 기기에도 다시 나타나요) */
+  async restore(tid) {
+    const it = await this.idb('readonly', st => st.get(tid)); if (!it) return null;
+    const cur = await Lib.list();
+    const taken = cur.items.some(x => x.id === it.id);
+    const r = await Lib.saveRaw({ name: it.name, measures: it.measures, composer: it.composer || '' }, it.data, taken ? null : it.id);
+    if (!r || r.error) return r;
+    await this.remove(tid);
+    if (typeof Cloud !== 'undefined') { try { const m = Cloud.mem(); delete m.tomb[it.id]; Cloud.saveMem(m); } catch (e) { } Cloud.soon(); }
+    return r;
+  },
+  async remove(tid) { await this.idb('readwrite', st => st.delete(tid)); },
+  async clear() { await this.idb('readwrite', st => st.clear()); },
+};
+async function trashDialog() {
+  let data;
+  try { data = await Trash.list(); } catch (e) { console.error(e); toast(LG('휴지통을 열 수 없어요', 'Cannot open the trash', 'ゴミ箱を開けません')); return; }
+  const when = ms => new Date(ms).toLocaleDateString(I18N.lang === 'ko' ? 'ko-KR' : I18N.lang === 'ja' ? 'ja-JP' : 'en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+  const left = it => Math.max(0, Math.ceil((it.deleted + TRASH_DAYS * DAY_MS - Date.now()) / DAY_MS));
+  modal(`<h2>🗑 ${LG('휴지통', 'Trash', 'ゴミ箱')}</h2>
+    <p class="muted small">${LG(`지운 악보는 ${TRASH_DAYS}일 동안 여기 있어요 · 되살리면 내 악보함으로 돌아가요 · ${TRASH_DAYS}일이 지나면 저절로 지워져요`, `Deleted scores stay here for ${TRASH_DAYS} days · Restore puts them back in My scores · after ${TRASH_DAYS} days they are removed automatically`, `削除した楽譜は${TRASH_DAYS}日間ここにあります · 復元するとマイ楽譜に戻ります`)}</p>
+    <div class="lib-usage"><span data-notr>${LG(`${data.items.length}개 · ${fmtSize(data.used)}`, `${data.items.length} · ${fmtSize(data.used)}`, `${data.items.length}件 · ${fmtSize(data.used)}`)}</span></div>
+    <div class="lib-list">${data.items.length ? data.items.map(it => `<div class="lib-item trashed" data-tid="${esc(it.tid)}">
+      <div class="lib-main"><b data-notr>${esc(it.name)}</b><span class="muted small" data-notr>${LG('지운 때', 'Deleted', '削除')} ${esc(when(it.deleted))} · ${LG(`${it.measures}마디`, `${it.measures} measures`, `${it.measures}小節`)} · ${fmtSize(it.size)}</span></div>
+      <span class="days">${LG(`${left(it)}일 남음`, `${left(it)} days left`, `残り${left(it)}日`)}</span>
+      <button class="btn" data-trest>${LG('되살리기', 'Restore', '復元')}</button><button class="btn icon" data-tdel title="${LG('완전히 지우기', 'Delete forever', '完全に削除')}">✕</button></div>`).join('')
+      : `<p class="muted">${LG('휴지통이 비어 있어요', 'The trash is empty', 'ゴミ箱は空です')}</p>`}</div>
+    <div class="modal-btns"><button class="btn danger" id="tEmpty"${data.items.length ? '' : ' disabled'}>${LG('휴지통 비우기', 'Empty trash', 'ゴミ箱を空にする')}</button><span class="grow"></span><button class="btn" id="tBack">← ${LG('내 악보함', 'My scores', 'マイ楽譜')}</button><button class="btn primary" data-close>${LG('닫기', 'Close', '閉じる')}</button></div>`, md => {
+    $('#tBack', md).addEventListener('click', () => libraryDialog());
+    $$('.lib-item', md).forEach(row => {
+      const tid = row.dataset.tid, it = data.items.find(x => x.tid === tid);
+      $('[data-trest]', row).addEventListener('click', async () => {
+        const r = await Trash.restore(tid);
+        if (!r || r.error) { toast(r && r.error === 'full' ? LG('내 악보함이 꽉 찼어요 · 안 쓰는 악보를 지운 뒤 되살려 주세요', 'My scores is full · delete something first', 'マイ楽譜がいっぱいです') : LG('되살리지 못했어요', 'Could not restore', '復元できませんでした'), 4200); return; }
+        toast(LG(`되살렸어요 — ${it.name} (내 악보함)`, `Restored — ${it.name} (My scores)`, `復元しました — ${it.name}`));
+        trashDialog();
+      });
+      $('[data-tdel]', row).addEventListener('click', async () => {
+        if (!confirm(LG(`"${it.name}"을(를) 완전히 지울까요? 다시 되살릴 수 없어요.`, `Delete "${it.name}" forever? It cannot be restored.`, `「${it.name}」を完全に削除しますか? 復元できません。`))) return;
+        await Trash.remove(tid); trashDialog();
+      });
+    });
+    $('#tEmpty', md).addEventListener('click', async () => {
+      if (!confirm(LG(`휴지통의 악보 ${data.items.length}개 (${fmtSize(data.used)})를 모두 완전히 지울까요? 다시 되살릴 수 없어요.`, `Permanently delete all ${data.items.length} scores (${fmtSize(data.used)}) in the trash? They cannot be restored.`, `ゴミ箱の楽譜${data.items.length}件をすべて完全に削除しますか? 復元できません。`))) return;
+      await Trash.clear(); toast(LG('휴지통을 비웠어요', 'Trash emptied', 'ゴミ箱を空にしました')); trashDialog();
+    });
+  }, 'lib-modal trash-modal');
+}
 const fmtSize = b => b < 1024 ? b + ' B' : b < 1048576 ? (b / 1024).toFixed(1) + ' KB' : (b / 1048576).toFixed(1) + ' MB';
 /** 지금 악보를 내 악보함에 (내 악보함에서 연 악보면 그 자리에 덮어써요 · asNew = 새로 하나 더) */
 async function libSave(asNew) {
@@ -2462,44 +2673,170 @@ async function libSave(asNew) {
     toast(LG(`내 악보함에 저장했어요 — ${r.name} (${fmtSize(r.size)})`, `Saved to My scores — ${r.name} (${fmtSize(r.size)})`, `マイ楽譜に保存しました — ${r.name} (${fmtSize(r.size)})`));
   } catch (e) { console.error(e); toast(LG('저장하지 못했어요: ', 'Could not save: ', '保存できませんでした: ') + e.message, 4000); }
 }
+/* ---------- 내 악보함 목록 (가나다 묶음) ----------
+ * 곡목 첫 글자의 초성(ㄱ~ㅎ)으로 묶고, 왼쪽 초성 줄을 누르면 그 묶음으로 · 검색 = 곡목·작곡가 (초성만 써도 돼요: ㄴㄱ → 나 같은…)
+ * 줄마다: 곡목 · 작곡가 · 마디 수 · 고친 날짜 · ⋯ (열기 · 이름 바꾸기 · 휴지통으로) · 줄을 누르면 열기 */
+const CHO = ['ㄱ', 'ㄲ', 'ㄴ', 'ㄷ', 'ㄸ', 'ㄹ', 'ㅁ', 'ㅂ', 'ㅃ', 'ㅅ', 'ㅆ', 'ㅇ', 'ㅈ', 'ㅉ', 'ㅊ', 'ㅋ', 'ㅌ', 'ㅍ', 'ㅎ'];
+const CHO_BASE = { 'ㄲ': 'ㄱ', 'ㄸ': 'ㄷ', 'ㅃ': 'ㅂ', 'ㅆ': 'ㅅ', 'ㅉ': 'ㅈ' };
+const LIB_INDEX = ['ㄱ', 'ㄴ', 'ㄷ', 'ㄹ', 'ㅁ', 'ㅂ', 'ㅅ', 'ㅇ', 'ㅈ', 'ㅊ', 'ㅋ', 'ㅌ', 'ㅍ', 'ㅎ', 'A', '#'];
+/** 글자 → 초성 (한글 아니면 그대로) */
+function choOf(ch) {
+  const c = ch.charCodeAt(0);
+  if (c >= 0xAC00 && c <= 0xD7A3) return CHO[Math.floor((c - 0xAC00) / 588)];
+  return ch;
+}
+/** 곡목 → 묶음 글자 (ㄱ~ㅎ · 영어 = A · 숫자·기호 = #) */
+function libGroupOf(name) {
+  const ch = (name || '').trim()[0] || '#';
+  const c = choOf(ch);
+  if (CHO.includes(c)) return CHO_BASE[c] || c;
+  if (/[ㄱ-ㅎ]/.test(c)) return CHO_BASE[c] || c;
+  if (/[a-z]/i.test(c)) return 'A';
+  return '#';
+}
+/** 검색: 곡목·작곡가에 들어 있거나, 초성만 쓴 검색어가 곡목 초성과 맞으면 */
+function libMatch(it, q) {
+  if (!q) return true;
+  const qq = q.replace(/\s+/g, '').toLowerCase();
+  const name = (it.name || '').replace(/\s+/g, '').toLowerCase(), comp = (it.composer || '').replace(/\s+/g, '').toLowerCase();
+  if (name.includes(qq) || comp.includes(qq)) return true;
+  if (/^[ㄱ-ㅎ]+$/.test(qq)) return [...name].map(choOf).join('').includes(qq);
+  return false;
+}
+/** 고친 날짜: 오늘 14:20 · 어제 · 11.24 · 2025.3.2 */
+function libDate(ms) {
+  const d = new Date(ms), now = new Date();
+  const day = x => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
+  const diff = Math.round((day(now) - day(d)) / DAY_MS);
+  const hm = `${d.getHours()}:${String(d.getMinutes()).padStart(2, '0')}`;
+  if (diff === 0) return LG(`오늘 ${hm}`, `Today ${hm}`, `今日 ${hm}`);
+  if (diff === 1) return LG('어제', 'Yesterday', '昨日');
+  if (d.getFullYear() === now.getFullYear()) return `${d.getMonth() + 1}.${d.getDate()}`;
+  return `${d.getFullYear()}.${d.getMonth() + 1}.${d.getDate()}`;
+}
+/** 예전에 저장한 악보는 목록에 작곡가가 없어요 → 악보를 열어 읽고 이 기기에 기억 (바꾼 시각이 같을 때만) */
+async function libFillComposers(items) {
+  let memo = {}; try { memo = JSON.parse(localStorage.getItem('bflat.libComp') || '{}'); } catch (e) { }
+  let dirty = false;
+  for (const it of items) {
+    if (it.composer !== undefined) continue;
+    const m = memo[it.id];
+    if (m && m[0] === it.updated) { it.composer = m[1]; continue; }
+    try { const s = await Lib.load(it.id); it.composer = s.composer || ''; memo[it.id] = [it.updated, it.composer]; dirty = true; } catch (e) { it.composer = ''; }
+  }
+  if (dirty) try { localStorage.setItem('bflat.libComp', JSON.stringify(memo)); } catch (e) { }
+}
 /** fromSync = 다른 기기와 맞춘 뒤 다시 그리기 (또 맞추지 않아요) */
 async function libraryDialog(fromSync) {
   let data;
   try { data = await Lib.list(); } catch (e) { console.error(e); toast(LG('내 악보함을 열 수 없어요', 'Cannot open My scores', 'マイ楽譜を開けません')); return; }
+  await libFillComposers(data.items);
   const pct = Math.min(100, data.used / data.limit * 100);
-  const when = ms => new Date(ms).toLocaleString(I18N.lang === 'ko' ? 'ko-KR' : I18N.lang === 'ja' ? 'ja-JP' : 'en-US', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
-  modal(`<h2>내 악보함</h2>
-  <div class="lib-usage"><div class="lib-bar"><i style="width:${pct.toFixed(1)}%"></i></div><span data-notr>${fmtSize(data.used)} / ${fmtSize(data.limit)}</span></div>
+  const trashN = await Trash.count();
+  const items = data.items.slice().sort((a, b) => (a.name || '').localeCompare(b.name || '', 'ko'));
+  const other = it => typeof Cloud !== 'undefined' && it.owner && Cloud.uid() && it.owner !== Cloud.uid();
+  let q = App.libQuery || '';
+  const rowHtml = it => `<div class="lc-row${it.id === App.libId ? ' cur' : ''}" data-id="${esc(it.id)}" title="${LG('눌러서 열기', 'Click to open', 'クリックで開く')}">
+      <b data-notr>${esc(it.name)}</b>
+      ${it.composer ? `<span class="who" data-notr>${esc(it.composer)}</span>` : ''}
+      <span class="n" data-notr>${LG(`${it.measures}마디`, `${it.measures} m.`, `${it.measures}小節`)}</span>
+      <span class="d" data-notr title="${esc(new Date(it.updated).toLocaleString())}">${esc(libDate(it.updated))}</span>
+      <button class="btn icon lc-more" data-more title="${LG('더 보기', 'More', 'その他')}">⋯</button>
+      ${other(it) ? `<span class="lc-note">${LG('다른 계정에서 저장 (연동 안 함)', 'saved by another account (not synced)', '別のアカウントで保存')}</span>` : ''}</div>`;
+  const listHtml = () => {
+    const vis = items.filter(it => libMatch(it, q));
+    if (!items.length) return `<p class="muted lc-empty">${LG('아직 저장한 악보가 없어요. 악보를 만든 다음 "지금 악보 저장"을 눌러요.', 'No saved scores yet. Make a score and press "Save current score".', 'まだ保存した楽譜がありません。')}</p>`;
+    if (!vis.length) return `<p class="muted lc-empty">${LG(`"${esc(q)}"에 맞는 악보가 없어요`, `No scores match "${esc(q)}"`, `「${esc(q)}」に合う楽譜はありません`)}</p>`;
+    return LIB_INDEX.map(g => {
+      const its = vis.filter(it => libGroupOf(it.name) === g);
+      return its.length ? `<div class="lc-h" data-g="${g}">${g}</div>${its.map(rowHtml).join('')}` : '';
+    }).join('');
+  };
+  modal(`<h2>${LG('내 악보함', 'My scores', 'マイ楽譜')}</h2>
+  <div class="lc-top"><label class="lc-search">🔍<input id="lQ" placeholder="${LG('곡목 · 작곡가 검색 (초성도 돼요: ㄴㄱ)', 'Search title · composer', '曲名・作曲者で検索')}" value="${esc(q)}" spellcheck="false"></label>
+    ${App.blank ? '' : `<button class="btn primary" id="lSave" title="${App.libId ? LG('지금 연 악보 자리에 덮어써요', 'Overwrites the open score', '開いている楽譜に上書き') : ''}">${App.libId ? LG('지금 악보 저장 (덮어쓰기)', 'Save (overwrite)', '保存 (上書き)') : LG('지금 악보 저장', 'Save current score', '現在の楽譜を保存')}</button>${App.libId ? `<button class="btn" id="lSaveNew">${LG('새로 하나 더', 'Save as new', '新規保存')}</button>` : ''}`}</div>
   ${typeof Cloud !== 'undefined' ? `<div class="lib-cloud small muted">${Cloud.statusHtml()}</div>` : ''}
-  <div class="lib-actions">${App.blank ? '' : `<button class="btn primary" id="lSave">${App.libId ? '지금 악보 저장 (덮어쓰기)' : '지금 악보 저장'}</button>${App.libId ? '<button class="btn" id="lSaveNew">새로 하나 더 저장</button>' : ''}`}</div>
-  <div class="lib-list">${data.items.length ? data.items.map(it => `<div class="lib-item${it.id === App.libId ? ' cur' : ''}" data-id="${esc(it.id)}">
-      <div class="lib-main"><b data-notr>${esc(it.name)}</b><span class="muted small" data-notr>${esc(when(it.updated))} · ${LG(`${it.measures}마디`, `${it.measures} measures`, `${it.measures}小節`)} · ${fmtSize(it.size)}${typeof Cloud !== 'undefined' && it.owner && Cloud.uid() && it.owner !== Cloud.uid() ? ' · ' + LG('다른 계정에서 저장 (연동 안 함)', 'saved by another account (not synced)', '別のアカウントで保存 (同期しない)') : ''}</span></div>
-      <button class="btn" data-lopen>열기</button><button class="btn icon" data-lren title="이름 바꾸기">✎</button><button class="btn icon" data-ldel title="지우기">🗑</button></div>`).join('') : '<p class="muted">아직 저장한 악보가 없어요. 악보를 만든 다음 "지금 악보 저장"을 눌러요.</p>'}</div>
-  <p class="muted small">악보는 작게 줄여서 보관해요 (악보 하나 보통 수십 KB · 전체 200MB까지).${typeof Cloud !== 'undefined' && Cloud.enabled() ? ' 같은 계정으로 로그인한 PC·휴대폰·태블릿과 똑같이 맞춰져요.' : Lib.native() ? '' : ' 브라우저에서는 이 브라우저에만 저장돼요.'}</p>
-  <div class="modal-btns"><span class="grow"></span><button class="btn primary" data-close>닫기</button></div>`, md => {
+  <div class="lc-wrap"><div class="lc-idx" id="lIdx"></div><div class="lc-list" id="lList"></div></div>
+  <div class="lc-foot"><div class="lib-bar"><i style="width:${pct.toFixed(1)}%"></i></div><span class="muted small" data-notr>${fmtSize(data.used)} / ${fmtSize(data.limit)}</span><span class="grow"></span>
+    <button class="btn" id="lMerge" title="${LG('여러 악보를 이어 붙여 하나로 · 순서 바꾸기', 'Join several scores into one · reorder', '複数の楽譜をつなげる')}">${LG('악보 합치기', 'Merge', '結合')}</button>
+    <button class="btn" id="lTrash">🗑 ${LG('휴지통', 'Trash', 'ゴミ箱')}${trashN ? ` (${trashN})` : ''}</button>
+    <button class="btn primary" data-close>${LG('닫기', 'Close', '閉じる')}</button></div>`, md => {
+    const list = $('#lList', md), idx = $('#lIdx', md);
+    const draw = () => {
+      list.innerHTML = listHtml();
+      const has = new Set($$('.lc-h', list).map(h => h.dataset.g));
+      idx.innerHTML = LIB_INDEX.map(g => `<span data-g="${g}" class="${has.has(g) ? '' : 'off'}">${g}</span>`).join('');
+      markIdx();
+    };
+    // 지금 보이는 묶음을 초성 줄에 파랗게
+    let picked = null, pickedAt = 0;   // 초성 줄을 누른 글자 (목록 끝이라 맨 위로 못 올라가도 그 글자를 파랗게)
+    const markIdx = () => {
+      if (picked && Date.now() - pickedAt < 400) { $$('span', idx).forEach(s => s.classList.toggle('on', s.dataset.g === picked)); return; }
+      picked = null;
+      const hs = $$('.lc-h', list); let cur = hs[0] ? hs[0].dataset.g : null;
+      const top = list.getBoundingClientRect().top + 4;
+      hs.forEach(h => { if (h.getBoundingClientRect().top <= top) cur = h.dataset.g; });
+      $$('span', idx).forEach(s => s.classList.toggle('on', s.dataset.g === cur));
+    };
+    list.addEventListener('scroll', markIdx);
+    idx.addEventListener('click', e => {
+      const s = e.target.closest('span[data-g]'); if (!s || s.classList.contains('off')) return;
+      const h = list.querySelector(`.lc-h[data-g="${s.dataset.g}"]`); if (h) list.scrollTop = h.offsetTop - list.offsetTop;
+      picked = s.dataset.g; pickedAt = Date.now();
+      markIdx();
+    });
+    $('#lQ', md).addEventListener('input', e => { q = App.libQuery = e.target.value; draw(); });
     const s1 = $('#lSave', md), s2 = $('#lSaveNew', md);
     if (s1) s1.addEventListener('click', async () => { await libSave(false); libraryDialog(); });
     if (s2) s2.addEventListener('click', async () => { await libSave(true); libraryDialog(); });
-    $$('.lib-item', md).forEach(row => {
-      const id = row.dataset.id, it = data.items.find(x => x.id === id);
-      $('[data-lopen]', row).addEventListener('click', async () => {
-        try {
-          const s = fixIds(await Lib.load(id));
-          stopPlay(); if (!App.blank) History.push(App.s);
-          App.s = s; App.sel = []; App.selMeasures = []; App.playStart = { m: 0, t: 0 }; App.verse = 0; App.fileHandle = null; App.nativePath = null; App.libId = id;
-          leavePdfOnly(); if (App.blank) leaveBlank(); closeModal();
-          if (Native()) Native().set_title(s.title || it.name);
-          buildSubbar(); changed();
-          toast(LG(`열었어요 — ${it.name}`, `Opened — ${it.name}`, `開きました — ${it.name}`));
-        } catch (e) { console.error(e); toast(LG('열 수 없어요: ', 'Cannot open: ', '開けません: ') + e.message, 4000); }
+    $('#lTrash', md).addEventListener('click', () => trashDialog());
+    $('#lMerge', md).addEventListener('click', () => mergeDialog());
+    const open = async it => {
+      try {
+        const s = fixIds(await Lib.load(it.id));
+        stopPlay(); if (!App.blank) History.push(App.s);
+        App.s = s; App.sel = []; App.selMeasures = []; App.playStart = { m: 0, t: 0 }; App.verse = 0; App.fileHandle = null; App.nativePath = null; App.libId = it.id;
+        leavePdfOnly(); if (App.blank) leaveBlank(); closeModal();
+        if (Native()) Native().set_title(s.title || it.name);
+        buildSubbar(); changed();
+        toast(LG(`열었어요 — ${it.name}`, `Opened — ${it.name}`, `開きました — ${it.name}`));
+      } catch (e) { console.error(e); toast(LG('열 수 없어요: ', 'Cannot open: ', '開けません: ') + e.message, 4000); }
+    };
+    // ⋯ 작은 메뉴 (창 안에 띄워요)
+    const closeMenu = () => { const m = $('.lc-menu', md); if (m) m.remove(); };
+    const menu = (btn, it) => {
+      closeMenu();
+      const m = document.createElement('div'); m.className = 'lc-menu';
+      m.innerHTML = `<button data-a="open">📂 ${LG('열기', 'Open', '開く')}</button><button data-a="ren">✎ ${LG('이름 바꾸기', 'Rename', '名前の変更')}</button><button data-a="del" class="red">🗑 ${LG('휴지통으로', 'Move to trash', 'ゴミ箱へ')}</button>`;
+      md.appendChild(m);
+      const r = btn.getBoundingClientRect(), mr = md.getBoundingClientRect();
+      m.style.top = (r.bottom - mr.top + md.scrollTop + 2) + 'px'; m.style.right = (mr.right - r.right) + 'px';
+      if (r.bottom + m.offsetHeight > Math.min(innerHeight, mr.bottom) - 8) m.style.top = (r.top - mr.top + md.scrollTop - m.offsetHeight - 2) + 'px';
+      m.addEventListener('click', async e => {
+        const a = e.target.closest('[data-a]'); if (!a) return;
+        closeMenu();
+        if (a.dataset.a === 'open') return open(it);
+        if (a.dataset.a === 'ren') return askText(LG('악보 이름', 'Score name', '楽譜の名前'), '', it.name, async v => { v = v.trim(); if (!v) return; await Lib.rename(it.id, v); libraryDialog(); });
+        // 바로 사라지지 않고 휴지통으로 (30일 동안 되살리기)
+        await Lib.del(it.id); if (App.libId === it.id) App.libId = null;
+        toast(LG(`"${it.name}"을(를) 휴지통으로 옮겼어요 · ${TRASH_DAYS}일 안에 되살릴 수 있어요`, `Moved "${it.name}" to the trash · restore it within ${TRASH_DAYS} days`, `「${it.name}」をゴミ箱へ移しました · ${TRASH_DAYS}日以内なら復元できます`), 3600);
+        libraryDialog();
       });
-      $('[data-lren]', row).addEventListener('click', () => askText(LG('악보 이름', 'Score name', '楽譜の名前'), '', it.name, async v => { v = v.trim(); if (!v) return; await Lib.rename(id, v); libraryDialog(); }));
-      $('[data-ldel]', row).addEventListener('click', async () => {
-        if (!confirm(LG(`"${it.name}"을(를) 내 악보함에서 지울까요? 지우면 되돌릴 수 없어요.`, `Delete "${it.name}" from My scores? This cannot be undone.`, `「${it.name}」をマイ楽譜から削除しますか? 元に戻せません。`))) return;
-        await Lib.del(id); if (App.libId === id) App.libId = null; libraryDialog();
-      });
+    };
+    md.addEventListener('mousedown', e => { if (!e.target.closest('.lc-menu, [data-more]')) closeMenu(); });
+    list.addEventListener('click', e => {
+      const row = e.target.closest('.lc-row'); if (!row) return;
+      const it = items.find(x => x.id === row.dataset.id); if (!it) return;
+      if (e.target.closest('[data-more]')) { e.stopPropagation(); return menu(e.target.closest('[data-more]'), it); }
+      open(it);
     });
-  }, 'lib-modal');
+    draw();
+    // 지금 연 악보가 보이게
+    const cur = $('.lc-row.cur', list); if (cur && !q) list.scrollTop = Math.max(0, cur.offsetTop - list.offsetTop - 60);
+    markIdx();
+    // 휴대폰·탭: 검색 칸에 바로 커서를 두면 자판이 올라와 목록을 가려요
+    if (isTouchUI()) setTimeout(() => { const i = $('#lQ', md); if (i && document.activeElement === i) i.blur(); }, 0);
+  }, 'lib-modal lc-modal');
   // 열 때마다 계정의 다른 기기와 맞춰요 (바뀐 게 있으면 목록을 다시 그려요)
   if (!fromSync && typeof Cloud !== 'undefined') Cloud.sync();
 }
@@ -2642,8 +2979,36 @@ function showPdf(file) {
     : 'PDF를 옆에 띄웠어요 · 보면서 쓰거나, "계이름 넣기" / "자동 인식 → 악보로"를 눌러요', 3600);
   // 패널이 보인 다음에 그려야 폭이 맞아요
   showPdfBase();
+  updatePdfShow();
 }
 function leavePdfOnly() { App.pdfOnly = false; document.body.classList.remove('pdf-only'); }
+/** 원본(PDF·사진) 숨기기 — 지우지 않아요 · 📄 원본 버튼으로 언제든 다시 보기 */
+function hidePdf(quiet) {
+  if (!Pdf.file) return closePdf();
+  $('#pdfPanel').hidden = true;
+  if (App.pdfOnly) { leavePdfOnly(); if (App.blank) scoreTypeDialog(true); }
+  updatePdfShow();
+  if (!quiet) toast(LG('원본을 숨겼어요 · 왼쪽 아래 "📄 원본"으로 언제든 다시 봐요', 'Original hidden · tap "📄 Original" at the bottom left to see it again', '原本を隠しました · 左下の「📄 原本」でいつでも再表示'), 3200);
+}
+function showPdfPanel() {
+  if (!Pdf.file) return;
+  $('#pdfPanel').hidden = false;
+  updatePdfShow();
+  showPdfBase();
+}
+function updatePdfShow() {
+  const b = $('#pdfShow'); if (b) b.hidden = !(Pdf.file && $('#pdfPanel').hidden);
+  document.body.classList.toggle('pdf-open', !!Pdf.file && !$('#pdfPanel').hidden);
+}
+/** 휴대폰·태블릿 화면 방향: 가로 = 원본 반 · 악보 반 (PC 처럼) · 세로 = 원본은 숨겨 두고 📄 원본으로 보기 */
+function updateOrient() {
+  if (!isTouchUI()) return;
+  const land = innerWidth > innerHeight;
+  const was = document.body.classList.contains('land');
+  document.body.classList.toggle('land', land); document.body.classList.toggle('port', !land);
+  if (App._orientInit && was !== land && Pdf.file && !App.pdfOnly) { if (land) showPdfPanel(); else hidePdf(true); }
+  App._orientInit = true;
+}
 function closePdf() {
   $('#pdfPanel').hidden = true; $('#pdfFrame').src = 'about:blank';
   $('#pdfView').innerHTML = ''; $('#pdfView').dataset.for = ''; $('#pdfView').hidden = true;
@@ -2651,6 +3016,7 @@ function closePdf() {
   Pdf.file = null; Pdf.url = null; Pdf.doc = null; Pdf.omrXml = null; Pdf.omrLyr = null; Pdf.solOn = false;
   $('#pdfSolView').innerHTML = ''; $('#pdfSolBar').hidden = true;
   if (App.pdfOnly) { leavePdfOnly(); if (App.blank) scoreTypeDialog(true); }
+  updatePdfShow();
 }
 /** 자동 인식 실패 → 진짜 이유 (omrcore.py 가 Audiveris 기록을 읽어서 reason · pages 로 알려 줘요) */
 function omrFailText(res) {
@@ -2886,7 +3252,10 @@ async function pdfRecognize() {
   if (fit || swing) changed();
   const gotLyr = lyrics && App.s.measures.some(m => Object.values(m.lyrics || {}).some(Boolean));
   const msg = Pdf.omrCount > 1 ? `인식했어요 (악장 ${Pdf.omrCount}개 중 첫 번째)` : '인식했어요';
-  toast(msg + (lyrics ? (gotLyr ? ' · 가사도 넣었어요' : ' · 가사는 찾지 못했어요') : '') + ' · 틀린 곳은 옆의 PDF를 보며 고쳐 주세요', 4600);
+  // 휴대폰·태블릿 세로: 원본은 숨겨 두고(지우지 않아요) 악보를 크게 · 가로: 원본 반 · 악보 반
+  const port = isTouchUI() && innerWidth <= innerHeight;
+  if (port) hidePdf(true); else showPdfPanel();
+  toast(msg + (lyrics ? (gotLyr ? ' · 가사도 넣었어요' : ' · 가사는 찾지 못했어요') : '') + (port ? ' · 원본은 왼쪽 아래 "📄 원본"으로 보며 고쳐 주세요' : ' · 틀린 곳은 옆의 PDF를 보며 고쳐 주세요'), 4600);
 }
 /**
  * 새 인식 엔진 쓸까? → true(새 엔진) · false(예전 방식) · null(취소)
@@ -3687,12 +4056,16 @@ function phoneLinkNotice(kind) {
 }
 function initPdfResizer() {
   const rz = $('.pdf-resizer'), panel = $('#pdfPanel');
-  rz.addEventListener('mousedown', e => {
+  // 마우스·손가락(태블릿 가로 화면) 모두 끌어서 폭 조절
+  rz.style.touchAction = 'none';
+  rz.addEventListener('pointerdown', e => {
     e.preventDefault(); e.stopPropagation(); rz.classList.add('drag'); document.body.classList.add('dragging-pdf');
+    try { rz.setPointerCapture(e.pointerId); } catch (_) { }
     const wa = $('#workArea').getBoundingClientRect();
-    const mv = ev => { const w = Math.max(260, Math.min(wa.width * 0.75, wa.right - ev.clientX)); panel.style.setProperty('--pdfw', w + 'px'); };
-    const up = () => { rz.classList.remove('drag'); document.body.classList.remove('dragging-pdf'); window.removeEventListener('mousemove', mv); window.removeEventListener('mouseup', up); try { localStorage.setItem('bflat.pdfw', panel.style.getPropertyValue('--pdfw')); } catch (e2) { } };
-    window.addEventListener('mousemove', mv); window.addEventListener('mouseup', up);
+    const minW = isTouchUI() ? 200 : 260;
+    const mv = ev => { const w = Math.max(minW, Math.min(wa.width * 0.75, wa.right - ev.clientX)); panel.style.setProperty('--pdfw', w + 'px'); };
+    const up = () => { rz.classList.remove('drag'); document.body.classList.remove('dragging-pdf'); window.removeEventListener('pointermove', mv); window.removeEventListener('pointerup', up); window.removeEventListener('pointercancel', up); try { localStorage.setItem('bflat.pdfw', panel.style.getPropertyValue('--pdfw')); } catch (e2) { } };
+    window.addEventListener('pointermove', mv); window.addEventListener('pointerup', up); window.addEventListener('pointercancel', up);
   });
 }
 /** 열기 창 (데스크톱 앱이면 윈도우 파일 창) */
@@ -3716,11 +4089,7 @@ async function openFile(file, nativePath) {
   file = await withProperName(file);     // 휴대폰: 이름에 확장자가 없으면 내용으로 알아내요
   if (isScoreSource(file.name)) { openScoreSource(file); return; }
   try {
-    const nm = file.name.toLowerCase();
-    let s;
-    if (nm.endsWith('.mxl')) s = importMusicXML(await unzipMxl(await file.arrayBuffer()));
-    else if (nm.endsWith('.musicxml') || nm.endsWith('.xml')) s = importMusicXML(await file.text());
-    else { s = JSON.parse(await file.text()); if (!s.measures) throw new Error('BFlat 악보 파일이 아니에요'); s = fixIds(s); }
+    const s = await readScoreFile(file);
     stopPlay();
     History.push(App.s);
     App.s = s; App.sel = []; App.selMeasures = []; App.playStart = { m: 0, t: 0 }; App.verse = 0; App.fileHandle = null; App.libId = null;
@@ -3731,6 +4100,150 @@ async function openFile(file, nativePath) {
     buildSubbar(); changed();
     toast(`열었어요 — ${file.name}`);
   } catch (e) { console.error(e); toast('열 수 없어요: ' + e.message, 4000); }
+}
+/** 악보 파일(.bflat · .json · .musicxml · .xml · .mxl) → 악보 */
+async function readScoreFile(file) {
+  const nm = file.name.toLowerCase();
+  if (nm.endsWith('.mxl')) return importMusicXML(await unzipMxl(await file.arrayBuffer()));
+  if (nm.endsWith('.musicxml') || nm.endsWith('.xml')) return importMusicXML(await file.text());
+  const s = JSON.parse(await file.text());
+  if (!s || !Array.isArray(s.measures)) throw new Error(LG('BFlat 악보 파일이 아니에요', 'Not a BFlat score file', 'BFlatの楽譜ファイルではありません'));
+  return fixIds(s);
+}
+
+/* ---------- 악보 합치기 · 순서 바꾸기 ----------
+ * 여러 악보를 위에서부터 차례로 이어 붙여 새 악보 하나로 (원래 악보는 그대로 · Ctrl+Z 로 되돌리기)
+ * - 곡마다 새 줄에서 시작 · 조표·박자는 곡마다 첫 마디에 (달라지면 악보에 바뀜 표시)
+ * - 오선 수(악보 종류)가 같은 악보끼리만 */
+function cloneScoreFresh(src) {
+  const s = JSON.parse(JSON.stringify(src));
+  const idMap = new Map();
+  const re = id => { const n = uid(); idMap.set(id, n); return n; };
+  s.measures.forEach(m => { m.id = uid(); measureAllNotes(m).forEach(n => { n.id = re(n.id); }); });
+  s.slurs = (s.slurs || []).filter(x => idMap.has(x.a) && idMap.has(x.b)).map(x => Object.assign({}, x, { id: uid(), a: idMap.get(x.a), b: idMap.get(x.b) }));
+  return s;
+}
+/** pieces = [{ s, title }] → 합친 악보 (opt.bar = 곡 사이 겹세로줄 · opt.form = 곡 제목을 송폼 칸에) */
+function mergeScores(pieces, opt) {
+  opt = opt || {};
+  const first = cloneScoreFresh(pieces[0].s);
+  const nSt = staffCount(first);
+  const out = first;
+  out.measures = []; out.lines = []; out.slurs = [];
+  out.lyricLines = 1;
+  let curKey = null, curTime = null;
+  pieces.forEach((pc, k) => {
+    const src = cloneScoreFresh(pc.s);
+    if (staffCount(src) !== nSt) throw new Error(LG(`"${pc.title}"은(는) 오선 수가 달라서 합칠 수 없어요 (같은 악보 종류끼리만)`, `"${pc.title}" has a different number of staves (only the same score type can be merged)`, `「${pc.title}」は五線の数が違うので結合できません`));
+    if (!src.measures.length) return;
+    const m0 = src.measures[0];
+    const key = (m0.key !== null && m0.key !== undefined) ? m0.key : src.key;
+    const time = m0.time ? { num: m0.time.num, den: m0.time.den } : { num: src.time.num, den: src.time.den };
+    src.key = key; src.time = { num: time.num, den: time.den };
+    if (k > 0) {
+      // 곡이 바뀌는 자리: 조표·박자를 첫 마디에 적어 둬요 (같으면 악보에는 그대로)
+      if (key !== curKey) m0.key = key; else m0.key = null;
+      if (!curTime || time.num !== curTime.num || time.den !== curTime.den) m0.time = time; else m0.time = null;
+      const last = out.measures[out.measures.length - 1];
+      if (opt.bar && last && !last.end) last.end = 'double';
+    } else { out.key = key; out.time = time; m0.key = null; m0.time = null; }
+    if (opt.form && pieces.length > 1 && !m0.form) m0.form = pc.title;
+    // 곡 안에서 바뀌는 조표·박자를 따라가요 (다음 곡 첫 마디 비교용)
+    computeContexts(src).forEach(c => { curKey = c.key; curTime = { num: c.num, den: c.den }; });
+    // 끝세로줄(final)은 마지막 곡만
+    if (k < pieces.length - 1) src.measures.forEach(m => { if (m.end === 'final') m.end = opt.bar ? 'double' : ''; });
+    out.measures.push(...src.measures);
+    let lines = (src.lines || []).filter(n => n > 0);
+    const tot = lines.reduce((a, b) => a + b, 0);
+    if (tot !== src.measures.length) lines = [src.measures.length];
+    out.lines.push(...lines);
+    out.slurs.push(...src.slurs);
+    out.lyricLines = Math.max(out.lyricLines, src.lyricLines || 1);
+  });
+  out.title = opt.title || pieces.map(p => p.title).join(' + ');
+  out.lyrRest = true; out.lyrSlur = true; out.lyrTie = true;
+  return fixIds(out);
+}
+function mergeDialog(initial) {
+  const keyName = k => k ? KEY_NAMES[k].split(' / ')[0] + LG('장조', ' major', '長調') : LG('다장조', 'C major', 'ハ長調');
+  const pieces = initial || [];
+  if (!initial && !App.blank) pieces.push({ s: JSON.parse(JSON.stringify(S())), title: S().title || LG('지금 악보', 'Current score', '現在の楽譜'), from: LG('지금 악보', 'current', '現在'), cur: true });
+  let libOpen = false, libItems = null;
+  const draw = md => {
+    const list = $('#mgList', md);
+    list.innerHTML = pieces.length ? pieces.map((p, i) => `<li class="mg-item" data-i="${i}">
+      <span class="mg-no">${i + 1}</span>
+      <div class="mg-main"><b data-notr>${esc(p.title)}</b><span class="muted small" data-notr>${p.s.measures.length}${LG('마디', ' meas.', '小節')} · ${p.s.time.num}/${p.s.time.den} · ${keyName(p.s.key)} · ${esc(p.from)}</span></div>
+      <button class="btn icon" data-mup title="${LG('위로', 'Up', '上へ')}"${i === 0 ? ' disabled' : ''}>▲</button><button class="btn icon" data-mdn title="${LG('아래로', 'Down', '下へ')}"${i === pieces.length - 1 ? ' disabled' : ''}>▼</button><button class="btn icon" data-mdel title="${LG('빼기', 'Remove', '外す')}">✕</button></li>`).join('')
+      : `<li class="muted mg-empty">${LG('아래에서 합칠 악보를 넣어 주세요 (2개 이상)', 'Add scores to merge below (2 or more)', '下から結合する楽譜を追加 (2つ以上)')}</li>`;
+    $('#mgGo', md).disabled = pieces.length < 2;
+    $('#mgCur', md).hidden = App.blank || pieces.some(p => p.cur);
+    const tot = pieces.reduce((a, p) => a + p.s.measures.length, 0);
+    $('#mgSum', md).textContent = pieces.length ? LG(`${pieces.length}곡 · 모두 ${tot}마디`, `${pieces.length} scores · ${tot} measures`, `${pieces.length}曲 · 計${tot}小節`) : '';
+    const lb = $('#mgLib', md);
+    lb.hidden = !libOpen;
+    if (libOpen) lb.innerHTML = !libItems ? `<div class="muted small">${LG('불러오는 중…', 'Loading…', '読み込み中…')}</div>`
+      : libItems.length ? libItems.map(it => `<div class="mg-lib-row"><span data-notr>${esc(it.name)}</span><span class="muted small">${it.measures}${LG('마디', ' meas.', '小節')}</span><button class="btn" data-ladd="${esc(it.id)}">＋ ${LG('넣기', 'Add', '追加')}</button></div>`).join('')
+      : `<div class="muted small">${LG('내 악보함이 비어 있어요', 'My scores is empty', 'マイ楽譜は空です')}</div>`;
+  };
+  modal(`<h2>${LG('악보 합치기 · 순서 바꾸기', 'Merge scores · reorder', '楽譜の結合 · 順番')}</h2>
+    <p class="muted small">${LG('위에서부터 차례로 이어 붙여 새 악보 하나로 만들어요 · ▲▼ = 순서 바꾸기 · 원래 악보는 그대로예요 (Ctrl+Z 로 되돌리기)', 'Scores are joined top to bottom into one new score · ▲▼ = reorder · the originals are not changed (Ctrl+Z to undo)', '上から順につないで1つの楽譜にします · ▲▼ = 順番 · 元の楽譜はそのまま')}</p>
+    <ol class="mg-list" id="mgList"></ol>
+    <div class="mg-add">
+      <button class="btn" id="mgCur">＋ ${LG('지금 악보', 'Current score', '現在の楽譜')}</button>
+      <button class="btn" id="mgFromLib">＋ ${LG('내 악보함에서…', 'From My scores…', 'マイ楽譜から…')}</button>
+      <button class="btn" id="mgFromFile">＋ ${LG('파일에서…', 'From a file…', 'ファイルから…')}</button>
+      <span class="grow"></span><span class="muted small" id="mgSum"></span>
+    </div>
+    <div class="mg-lib" id="mgLib" hidden></div>
+    <label class="fld">${LG('합친 악보 제목', 'Merged score title', '結合後のタイトル')}<input class="inp" id="mgTitle" placeholder="${LG('비우면 곡 제목을 이어서', 'Empty = titles joined', '空 = 曲名をつなげる')}"></label>
+    <label class="chk"><input type="checkbox" id="mgBar" checked> ${LG('곡 사이에 겹세로줄', 'Double barline between scores', '曲の間に複縦線')}</label>
+    <label class="chk"><input type="checkbox" id="mgForm" checked> ${LG('곡마다 첫 마디 위에 곡 제목 (송폼 칸)', 'Score title above each first measure (form label)', '各曲の最初の小節の上に曲名')}</label>
+    <div class="modal-btns"><button class="btn" data-close>${LG('취소', 'Cancel', 'キャンセル')}</button><button class="btn primary" id="mgGo">${LG('합치기', 'Merge', '結合')}</button></div>`, md => {
+    draw(md);
+    $('#mgList', md).addEventListener('click', e => {
+      const li = e.target.closest('.mg-item'); if (!li) return;
+      const i = +li.dataset.i;
+      if (e.target.closest('[data-mup]') && i > 0) [pieces[i - 1], pieces[i]] = [pieces[i], pieces[i - 1]];
+      else if (e.target.closest('[data-mdn]') && i < pieces.length - 1) [pieces[i + 1], pieces[i]] = [pieces[i], pieces[i + 1]];
+      else if (e.target.closest('[data-mdel]')) pieces.splice(i, 1);
+      else return;
+      draw(md);
+    });
+    $('#mgCur', md).addEventListener('click', () => { pieces.push({ s: JSON.parse(JSON.stringify(S())), title: S().title || LG('지금 악보', 'Current score', '現在の楽譜'), from: LG('지금 악보', 'current', '現在'), cur: true }); draw(md); });
+    $('#mgFromLib', md).addEventListener('click', async () => {
+      libOpen = !libOpen; draw(md);
+      if (libOpen && !libItems) { try { libItems = (await Lib.list()).items; } catch (e) { libItems = []; } draw(md); }
+    });
+    $('#mgLib', md).addEventListener('click', async e => {
+      const b = e.target.closest('[data-ladd]'); if (!b) return;
+      const it = libItems.find(x => x.id === b.dataset.ladd); b.disabled = true;
+      try { const s = fixIds(await Lib.load(it.id)); pieces.push({ s, title: s.title || it.name, from: LG('내 악보함', 'My scores', 'マイ楽譜') }); draw(md); }
+      catch (err) { console.error(err); toast(LG('열 수 없어요: ', 'Cannot open: ', '開けません: ') + err.message, 4000); b.disabled = false; }
+    });
+    $('#mgFromFile', md).addEventListener('click', async () => {
+      const add = async f => {
+        try { const s = await readScoreFile(f); pieces.push({ s, title: s.title || f.name.replace(/\.[^.]+$/, ''), from: f.name }); draw(md); }
+        catch (err) { console.error(err); toast(LG('합칠 수 없는 파일이에요: ', 'Cannot use this file: ', '使えないファイルです: ') + err.message, 4200); }
+      };
+      const api = Native();
+      if (api) { const res = await api.open_file('open'); if (res) add(b64ToFile(res)); return; }
+      const inp = document.createElement('input'); inp.type = 'file'; inp.multiple = true; inp.accept = '.bflat,.json,.musicxml,.xml,.mxl';
+      inp.addEventListener('change', async () => { for (const f of inp.files) await add(f); });
+      inp.click();
+    });
+    $('#mgGo', md).addEventListener('click', () => {
+      let s;
+      try { s = mergeScores(pieces, { bar: $('#mgBar', md).checked, form: $('#mgForm', md).checked, title: $('#mgTitle', md).value.trim() }); }
+      catch (err) { console.error(err); toast(err.message, 5200); return; }
+      stopPlay(); if (!App.blank) History.push(App.s);
+      App.s = s; App.sel = []; App.selMeasures = []; App.playStart = { m: 0, t: 0 }; App.verse = 0; App.fileHandle = null; App.nativePath = null; App.libId = null;
+      leavePdfOnly(); if (App.blank) leaveBlank(); closeModal();
+      if (Native()) Native().set_title(s.title);
+      buildSubbar(); changed();
+      toast(LG(`합쳤어요 — ${pieces.length}곡 · ${s.measures.length}마디 · 파일 → 내 악보함에 저장으로 보관해요`, `Merged — ${pieces.length} scores · ${s.measures.length} measures · save it with File → Save to My scores`, `結合しました — ${pieces.length}曲 · ${s.measures.length}小節`), 4600);
+    });
+  }, 'merge-modal');
 }
 function exportMenu(x, y) {
   popMenu(x, y, [{ v: 'xml', html: '<b>MusicXML</b> <span class="muted">MuseScore·Sibelius 등에서 이어서</span>' }, { v: 'mid', html: '<b>MIDI</b> <span class="muted">도돌이표를 펼친 연주 순서</span>' }, { v: 'wav', html: '<b>오디오 WAV</b>' }, { v: 'pdf', html: '<b>PDF</b> <span class="muted">인쇄 창에서 "PDF로 저장"</span>' }, { v: 'json', html: '<b>BFlat 파일</b> (.bflat)' }], async v => {
@@ -3913,12 +4426,16 @@ function setZoom(z) { App.zoom = Math.max(.4, Math.min(2.5, Math.round(z * 10) /
 /* ---------- 상단 메뉴 (파일 · 도구 · 도움말) ---------- */
 const TOP_MENUS = {
   menuFile: [['new', '새 악보…', ''], ['open', '열기…', 'Ctrl+O'], ['save', '저장', 'Ctrl+S'], '-', ['library', '내 악보함…', ''], ['libSave', '내 악보함에 저장', ''], '-', ['export', '내보내기…', ''], ['print', '인쇄 · PDF', 'Ctrl+P']],
-  menuTools: [['info', '곡 정보 · 악보 종류', ''], ['transpose', '조옮김', ''], ['solfa', '계이름', ''], '-', ['pdf', '악보 인식 (PDF · 사진 · 한글)…', ''], ['midiIn', 'MIDI 넣기', '']],
+  menuTools: [['info', '곡 정보 · 악보 종류', ''], ['transpose', '조옮김', ''], ['solfa', '계이름', ''], '-', ['pdf', '악보 인식 (PDF · 사진 · 한글)…', ''], ['pdfShow', '원본 악보 보기 (PDF · 사진)', ''], ['merge', '악보 합치기 · 순서 바꾸기…', ''], ['midiIn', 'MIDI 넣기', '']],
   menuHelp: [['help', '사용법', ''], ['shortcuts', '단축키', '']],
 };
 function topMenu(act, btn) {
   const r = btn.getBoundingClientRect();
-  const items = TOP_MENUS[act].map(it => it === '-' ? '-' : { v: it[0], html: `<span>${esc(it[1])}</span>${it[2] ? `<kbd>${it[2]}</kbd>` : ''}` });
+  let list = TOP_MENUS[act];
+  // 휴대폰·태블릿 가로: 위 막대에서 뺀 재생·설정·사용법은 도구 메뉴에서
+  if (act === 'menuTools' && document.body.classList.contains('touch') && document.body.classList.contains('land'))
+    list = list.concat(['-', ['play', Player.playing ? '■ 정지' : '▶ 재생', ''], ['settings', '설정', ''], ['help', '사용법', '']]);
+  const items = list.map(it => it === '-' ? '-' : { v: it[0], html: `<span>${esc(it[1])}</span>${it[2] ? `<kbd>${it[2]}</kbd>` : ''}` });
   popMenu(r.left, r.bottom + 4, items, v => onAction(v, v === 'export' ? btn : null));
 }
 /* ---------- 버튼 ---------- */
@@ -3935,6 +4452,9 @@ function onAction(act, btn, e) {
     case 'pdf': return pdfDialog();
     case 'solfa': return solfaDialog();
     case 'pdfClose': return closePdf();
+    case 'pdfHide': return hidePdf();
+    case 'merge': return mergeDialog();
+    case 'pdfShow': if (!Pdf.file) return toast(LG('열어 둔 원본(PDF·사진)이 없어요 · 도구 → 악보 인식으로 열어요', 'No original (PDF/photo) is open · use Tools → Score recognition', '開いている原本がありません · ツール → 楽譜認識で開いてください')); return showPdfPanel();
     case 'pdfOmr': return pdfRecognize();
     case 'pdfSol': return pdfSolfa();
     case 'pdfSolPrint': return pdfSolPrint();
@@ -3959,6 +4479,8 @@ function onAction(act, btn, e) {
     case 'grace': return toggleGrace();
     case 'slurTool': return slurTool();
     case 'text': return editText();
+    case 'verseAdd': return verseAdd();
+    case 'verseDel': return verseDel();
     case 'fillAll': return fillRests(false);
     case 'fillWorked': return fillRests(true);
     case 'toMeasure': return setMode('measure');
@@ -3993,6 +4515,7 @@ function init() {
   // 화면 언어: 지금 화면과 앞으로 생기는 창·알림 글자를 바꿔요
   I18N.start(); I18N.set(App.settings.lang || 'ko');
   try { const z = +localStorage.getItem('bflat.zoom'); if (z) App.zoom = z; } catch (e) { }
+  try { if (localStorage.getItem('bflat.lyrUnit') === 'line') App.lyrUnit = 'line'; } catch (e) { }
   applyTheme();
   let s = null;
   try { const raw = localStorage.getItem('bflat.autosave'); if (raw) s = fixIds(JSON.parse(raw)); } catch (e) { s = null; }
@@ -4006,7 +4529,8 @@ function init() {
     const b = e.target.closest('[data-act]'); if (b && !b.disabled) { onAction(b.dataset.act, b, e); return; }
     const d = e.target.closest('[data-dur]'); if (d) { setDur(d.dataset.dur); return; }
     const a = e.target.closest('[data-art]'); if (a && !a.disabled) { toggleArt(a.dataset.art); return; }
-    const v = e.target.closest('[data-verse]'); if (v) { App.verse = +v.dataset.verse; render(); return; }
+    const v = e.target.closest('[data-verse]'); if (v) { closeEditors(); App.verse = +v.dataset.verse; render(); return; }
+    const lu = e.target.closest('[data-lyrunit]'); if (lu) { closeEditors(); App.lyrUnit = lu.dataset.lyrunit; try { localStorage.setItem('bflat.lyrUnit', App.lyrUnit); } catch (_) { } render(); return; }
   });
   document.addEventListener('change', e => { if (e.target.id === 'selDyn' && e.target.value) setDyn(e.target.value); });
   const pages = $('#pages');
@@ -4059,7 +4583,11 @@ function init() {
     let hadZoom = false; try { hadZoom = !!localStorage.getItem('bflat.zoom'); } catch (e) { }
     // 휴대폰·태블릿(세로 화면)처럼 악보 쪽이 화면보다 넓으면 화면 폭에 맞춰요 (갤럭시 탭 세로 ≈ 800px)
     if (!hadZoom && innerWidth < L.PW + 40) App.zoom = Math.max(.3, Math.floor((innerWidth - 12) / L.PW * 100) / 100);
+    // 화면 방향 (가로 = 원본 반·악보 반 · 위 막대 한 줄)
   }
+  updateOrient();
+  window.addEventListener('resize', () => updateOrient());
+  window.addEventListener('orientationchange', () => setTimeout(updateOrient, 150));
   document.addEventListener('mousedown', e => { if (!e.__bflat && !e.target.closest('.pop')) closePop(); });
   $('#scroller').addEventListener('wheel', e => { if (e.ctrlKey) { e.preventDefault(); setZoom(App.zoom + (e.deltaY < 0 ? .1 : -.1)); } }, { passive: false });
   $('#fileOpen').addEventListener('change', e => { const f = e.target.files[0]; if (f) openFile(f); e.target.value = ''; });
