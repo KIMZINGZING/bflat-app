@@ -199,7 +199,7 @@ function newScore(o) {
     type: SCORE_TYPES[o.type] ? o.type : 'single', staves,
     app: 'BFlat Studio', version: 1, title: o.title, composer: o.composer, lyricist: o.lyricist,
     time: { num: +o.num, den: +o.den }, key: +o.key, clef: o.clef, tempo: +o.tempo || null, tempoText: o.tempoText || '', swing: !!o.swing, lyricLines: +o.lyricLines,
-    lines: [], measures: [], slurs: [], lyrRest: true, lyrSlur: true
+    lines: [], measures: [], slurs: [], lyrRest: true, lyrSlur: true, lyrTie: true
   };
   for (let i = 0; i < o.lines; i++) { s.lines.push(+o.mpl); for (let j = 0; j < o.mpl; j++) s.measures.push(newMeasure()); }
   return s;
@@ -221,6 +221,7 @@ function fixIds(s) {
   s.slurs.forEach(x => { if (!x.id) x.id = uid(); });
   migrateLyricRests(s);
   migrateLyricSlurs(s, !!s._fromXml); delete s._fromXml;
+  migrateLyricTies(s);
   // 줄 정보 보정
   let total = s.lines.reduce((a, b) => a + b, 0);
   if (total !== s.measures.length) {
@@ -328,7 +329,10 @@ function parseLyrics(text) {
   return out;
 }
 /** 가사 한 음절이 붙는 자리: 첫 줄 음표(붙임줄로 이어 받은 음은 빼고) · 쉼표도 한 자리 */
-function lyrSlot(n, tiedInto) { return !!n && (n.rest || (!!n.p && !tiedInto.has(n.id))); }
+//  — 음표 머리·쉼표 하나 = 가사 한 자리 (붙임줄·이음줄로 이어진 음도 따로 셉니다 · 이어진 음에는 '-' 를 써요)
+function lyrSlot(n) { return !!n && (n.rest || !!n.p); }
+/** 예전 규칙(붙임줄로 이어 받은 음은 자리가 아님) — 예전 악보를 옮길 때만 써요 */
+function lyrSlotOld(n, tiedInto) { return !!n && (n.rest || (!!n.p && !tiedInto.has(n.id))); }
 /** 음절 목록 → 가사 글 (parseLyrics 로 다시 읽으면 똑같이 나와요) */
 function lyrTokensText(toks) {
   while (toks.length && toks[toks.length - 1] === '') toks = toks.slice(0, -1);
@@ -364,7 +368,7 @@ function migrateLyricSlurs(s, markSyl) {
   const into = new Set((s.slurs || []).filter(x => x.type === 'tie').map(x => x.b));
   const real = t => t && t !== '_' && t !== '-';
   if (!(s.slurs || []).some(x => x.type !== 'tie')) return;
-  const slotsOf = m => (SNr(m, 0) || []).filter(n => lyrSlot(n, into));
+  const slotsOf = m => (SNr(m, 0) || []).filter(n => lyrSlotOld(n, into));
   if (markSyl) {
     const inner = slurInner(s);
     s.measures.forEach(m => {
@@ -382,6 +386,35 @@ function migrateLyricSlurs(s, markSyl) {
     });
   });
 }
+/** 예전 악보·가져온 악보(붙임줄로 이어 받은 음·이음줄 안의 음은 가사 자리가 아니던 때)
+ *  → 그 음 자리에 '-' 를 넣어 가사가 그대로 같은 음에 붙게 (이제는 음표 머리·쉼표 하나 = 한 자리)
+ *  - 그 마디에 그 절 가사가 있을 때만 · 가사가 끝난 뒤에는 바로 이어진 음까지만 '-' */
+function migrateLyricTies(s) {
+  if (s.lyrTie) return;
+  s.lyrTie = true;
+  const into = new Set((s.slurs || []).filter(x => x.type === 'tie').map(x => x.b));
+  const skip = noSylSet(s, into);   // 예전에 가사 자리가 아니던 음
+  if (!skip.size) return;
+  s.measures.forEach(m => {
+    const notes = SNr(m, 0) || [];
+    if (!notes.some(n => skip.has(n.id))) return;
+    Object.keys(m.lyrics || {}).forEach(v => {
+      const old = parseLyrics(m.lyrics[v]);
+      if (!old.length) return;
+      const out = []; let k = 0, cont = true;
+      notes.forEach(n => {
+        if (!lyrSlot(n)) return;
+        if (skip.has(n.id) && !n.rest) {
+          if (k < old.length || cont) out.push('-');
+          return;
+        }
+        if (k < old.length) { out.push(old[k++]); cont = true; }
+        else cont = false;
+      });
+      m.lyrics[v] = lyrTokensText(out.concat(old.slice(k)));
+    });
+  });
+}
 /** 예전 악보(쉼표를 가사 자리로 세지 않던 때) → 쉼표 자리에 빈 음절을 넣어 가사가 그대로 같은 음에 붙게 */
 function migrateLyricRests(s) {
   if (s.lyrRest) return;
@@ -395,7 +428,7 @@ function migrateLyricRests(s) {
       if (!old.length) return;
       const out = []; let k = 0;
       notes.forEach(n => {
-        if (!lyrSlot(n, into) || k >= old.length) return;
+        if (!lyrSlotOld(n, into) || k >= old.length) return;
         if (n.rest) out.push(''); else out.push(old[k++]);
       });
       if (out.length === k) return;                 // 가사 앞에 쉼표가 없으면 그대로
