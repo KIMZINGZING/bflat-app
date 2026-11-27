@@ -678,6 +678,17 @@ const I18N_DICT = {
   '클라리넷 5중주': ['Clarinet quintet', 'クラリネット五重奏'],
   '호른 5중주': ['Horn quintet', 'ホルン五重奏'],
   '기타 5중주': ['Guitar quintet', 'ギター五重奏'],
+  // 가사 절 추가 · 줄/마디 입력 칸
+  '절 칸(1절·2절…)을 눌러 그 절 가사 쓰기 · 빈 칸은 비워 두면 안 나와요 (후렴처럼 1절만 쓰는 줄) · 음표 머리·쉼표 하나 = 한 음절 · 붙임줄·이음줄로 이어진 음 = - · [두근] = 한 음에 두 글자 · _ = 한 음 건너뛰기 · 띄어쓰기 두 칸 = 빈 음 · 줄씩 쓸 때 | = 다음 마디': ['Click a verse row (V1, V2 …) to type that verse · rows left empty are not printed (e.g. a chorus with only verse 1) · one note head or rest = one syllable · tied/slurred note = - · [ab] = two letters on one note · _ = skip a note · two spaces = empty note · in line mode | = next measure', '番の欄(1番・2番…)をクリックしてその番の歌詞を入力 · 空の欄は表示されません (サビなど1番だけの段) · 符頭・休符1つ = 1音節 · タイ・スラーでつながった音 = - · [ドキ] = 1音に2文字 · _ = 1音飛ばす · スペース2つ = 空の音 · 段ごと入力では | = 次の小節'],
+  '＋ 절 추가': ['＋ Add verse', '＋ 番を追加'],
+  '− 이 절 지우기': ['− Delete this verse', '− この番を削除'],
+  '절 하나 더 (모든 줄에 빈 칸이 생겨요)': ['One more verse (an empty row appears on every line)', 'もう1番 (各段に空の欄ができます)'],
+  '지금 고른 절을 지워요 (Ctrl+Z 로 되돌리기)': ['Deletes the selected verse (Ctrl+Z to undo)', '選んだ番を削除 (Ctrl+Zで元に戻す)'],
+  '입력 칸': ['Input', '入力欄'],
+  '마디씩': ['Per measure', '小節ごと'],
+  '줄씩': ['Per line', '段ごと'],
+  '마디 하나씩 입력 · Enter = 다음 마디': ['Type one measure at a time · Enter = next measure', '1小節ずつ入力 · Enter = 次の小節'],
+  '한 줄(여러 마디)을 한 번에 입력 · 음표 수대로 마디에 나눠 넣어요 · | 로 마디를 직접 나눌 수도 있어요 · Enter = 다음 줄': ['Type a whole line (several measures) at once · split into measures by note count · or split yourself with | · Enter = next line', '1段(複数の小節)をまとめて入力 · 音符の数で小節に分けます · | で自分で分けることもできます · Enter = 次の段'],
 };
 /** 숫자 + 단위 (위 사전으로 안 바뀐 나머지) */
 const I18N_UNITS = {
