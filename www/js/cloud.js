@@ -47,12 +47,12 @@ const Cloud = {
   num(f) { return f ? +(f.integerValue || f.doubleValue || 0) : 0; },
   meta(doc) {
     const f = doc.fields || {};
-    return { id: doc.name.split('/').pop(), name: (f.name && f.name.stringValue) || '', measures: this.num(f.measures), updated: this.num(f.updated), size: this.num(f.size), deleted: !!(f.deleted && f.deleted.booleanValue) };
+    return { id: doc.name.split('/').pop(), name: (f.name && f.name.stringValue) || '', composer: f.composer ? (f.composer.stringValue || '') : undefined, measures: this.num(f.measures), updated: this.num(f.updated), size: this.num(f.size), deleted: !!(f.deleted && f.deleted.booleanValue) };
   },
   /** 서버의 악보 목록 (내용 빼고) */
   async list() {
     const out = {}; let page = '';
-    const mask = ['name', 'measures', 'updated', 'size', 'deleted'].map(k => 'mask.fieldPaths=' + k).join('&');
+    const mask = ['name', 'composer', 'measures', 'updated', 'size', 'deleted'].map(k => 'mask.fieldPaths=' + k).join('&');
     for (let guard = 0; guard < 50; guard++) {
       const r = await this.req('GET', `${this.base()}?pageSize=300&${mask}${page ? '&pageToken=' + encodeURIComponent(page) : ''}`);
       if (r.error) return r;
@@ -71,7 +71,7 @@ const Cloud = {
   },
   put(it, gz) {
     return this.req('PATCH', `${this.base()}/${encodeURIComponent(it.id)}`, { fields: {
-      name: { stringValue: it.name || '' }, measures: { integerValue: String(it.measures || 0) }, updated: { integerValue: String(it.updated || Date.now()) },
+      name: { stringValue: it.name || '' }, composer: { stringValue: it.composer || '' }, measures: { integerValue: String(it.measures || 0) }, updated: { integerValue: String(it.updated || Date.now()) },
       size: { integerValue: String(gz.length) }, deleted: { booleanValue: false }, data: { bytesValue: bytesToB64(gz) } } });
   },
   tomb(id, name, at) {
@@ -124,7 +124,7 @@ const Cloud = {
     const download = async (r, asId, name) => {
       const full = await this.get(r.id); if (full.error) throw full;
       if (!full.data) return;
-      const w = await Lib.saveRaw({ name: name || full.name, measures: full.measures, updated: full.updated, owner: uid }, full.data, asId || r.id);
+      const w = await Lib.saveRaw({ name: name || full.name, composer: full.composer, measures: full.measures, updated: full.updated, owner: uid }, full.data, asId || r.id);
       if (w && w.error) throw w;
       if (!asId) { m.base[r.id] = full.updated; if (typeof App !== 'undefined' && App.libId === r.id) changedOpen.push(full.name); }
       st.down++;
