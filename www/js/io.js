@@ -157,10 +157,11 @@ function exportMusicXML(s) {
           if (arts.length) nots.push(`<articulations>${arts.join('')}</articulations>`);
           if ((n.art || []).includes('fermata')) nots.push('<fermata/>');
           if (nots.length) x += `<notations>${nots.join('')}</notations>`;
-          if (si === 0 && lyrSlot(n, tied.noSyl)) {         // 쉼표도 가사 한 자리 (쉼표 글자는 내보내지 않아요)
+          if (si === 0 && lyrSlot(n)) {         // 음표 머리·쉼표 하나 = 가사 한 자리 (쉼표 글자는 내보내지 않아요)
             if (!n.rest) for (let v = 0; v < s.lyricLines; v++) {
               const sy = syls[v][sylIdx];
-              if (sy && sy !== '_') x += `<lyric number="${v + 1}"><syllabic>single</syllabic><text>${esc(sy)}</text></lyric>`;
+              // '-' = 붙임줄·이음줄로 이어진 음 (MusicXML 에는 가사 없음 → 다시 불러오면 '-' 로 돌아와요)
+              if (sy && sy !== '_' && sy !== '-') x +=`<lyric number="${v + 1}"><syllabic>single</syllabic><text>${esc(sy)}</text></lyric>`;
             }
             sylIdx++;
           }
@@ -348,7 +349,7 @@ function importMusicXML(text) {
     if (st.grace[si] && st.grace[si].length && n.p && !n.rest) { n.gr = st.grace[si]; st.grace[si] = []; }
     if (si === 0) el.querySelectorAll('lyric').forEach(ly => {
       const v = (parseInt(ly.getAttribute('number')) || 1) - 1;
-      if (v > 5) return;
+      if (v > 9) return;
       maxVerse = Math.max(maxVerse, v + 1);
       const tx = [...ly.querySelectorAll('text')].map(e => e.textContent).join('');
       (st.sylls[v] = st.sylls[v] || []).push({ tx, syl: txt(ly, 'syllabic', 'single'), idx: m.notes.length });
@@ -482,8 +483,9 @@ function importMusicXML(text) {
   });
   if (lineCount) s.lines.push(lineCount);
   if (s.lines.length === 1 && s.lines[0] > 6) { const n = s.lines[0]; s.lines = []; for (let k = 0; k < n; k += 4) s.lines.push(Math.min(4, n - k)); }
-  s.lyricLines = Math.min(6, maxVerse);
+  s.lyricLines = Math.min(10, maxVerse);
   s.lyrSlur = false; s._fromXml = true;   // 이음줄 안 음의 빈 가사 자리 정리 (fixIds)
+  s.lyrTie = false;                       // 붙임줄·이음줄로 이어진 음 = 가사 '-' 한 자리 (fixIds → migrateLyricTies)
   if (!gotTempo) s.tempo = null;          // 파일에 빠르기가 없으면 "♩=90"을 지어내지 않아요 (재생은 90으로)
   return fixIds(s);
 }
