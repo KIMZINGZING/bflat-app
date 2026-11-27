@@ -51,6 +51,9 @@ function textW(str, size, bold, family) {
   return w;
 }
 
+/** 가사 row번째 줄(절)의 글자 밑줄 y (첫 오선 아래) */
+function lyrRowY(sys, row) { return sys.staffTop + 4 * L.SP + 25 + row * 21 + Math.max(0, sys.lyrShift || 0); }
+
 /* ---------- 레이아웃 ---------- */
 function computeLayout(s, ctxs, opt) {
   const lay = { pages: [], systems: [], meas: [], notes: {}, lyr: [], slurs: [], startY: 0 };
@@ -96,7 +99,8 @@ function computeLayout(s, ctxs, opt) {
     });
     const avail = L.PW - x0 - L.MR - headerW;
     const verses = [];
-    for (let v = 0; v < (s.lyricLines || 1); v++) if (idxs.some(i => (s.measures[i].lyrics[v] || '').trim())) verses.push(v);
+    // 가사 모드에서는 모든 절의 칸을 줄마다 펼쳐요 (빈 절도 눌러서 쓸 수 있게) · 다른 모드·인쇄는 쓴 절만
+    for (let v = 0; v < (s.lyricLines || 1); v++) if ((opt && opt.lyrAll) || idxs.some(i => (s.measures[i].lyrics[v] || '').trim())) verses.push(v);
     // 마디마다 음표 간격(구간) 먼저 계산 → 음표가 많은 마디는 넓게 (마디 폭을 똑같이 나누면 빽빽한 마디에서 음표가 겹쳐요)
     const pre = idxs.map((i, k) => measureSegs(s, ctxs[i], s.measures[i], nSt, tied, verses));
     const PAD = L.MPAD_L + L.MPAD_R;
@@ -677,6 +681,19 @@ function renderScore(s, ctxs, lay, st) {
       if (st.hoverMeasure === i && (st.mode === 'lyric' || st.mode === 'bar' || st.mode === 'measure' || (st.mode === 'note' && !st.write)))
         out.push(`<rect x="${f1(g.x + 1)}" y="${f1(top - 10)}" width="${f1(g.w - 2)}" height="${f1(botAll - top + 20)}" rx="3" fill="rgba(37,99,235,.06)"/>`);
     });
+    // 가사 모드: 줄마다 절 칸 (1절·2절…) · 지금 쓰는 절은 파란 띠 · 빈 마디는 점선 칸 (눌러서 그 절·그 마디/줄 가사 쓰기)
+    if (st.mode === 'lyric') sys.verses.forEach((v, row) => {
+      const yy = lyrRowY(sys, row), cur = v === st.verse;
+      const xa = lay.meas[sys.idxs[0]].x, xb = sys.x1;
+      if (cur) out.push(`<rect x="${f1(xa)}" y="${f1(yy - 15)}" width="${f1(xb - xa)}" height="20" rx="3" fill="rgba(37,99,235,.10)"/>`);
+      const lbl = typeof LG === 'function' ? LG(`${v + 1}절`, `V${v + 1}`, `${v + 1}番`) : `${v + 1}절`;
+      out.push(`<text x="${f1(xa - 4)}" y="${f1(yy)}" text-anchor="end" font-family="sans-serif" font-size="11" font-weight="${cur ? 700 : 400}" fill="${cur ? '#2563eb' : '#7c8db5'}">${lbl}</text>`);
+      sys.idxs.forEach(i => {
+        if ((s.measures[i].lyrics[v] || '').trim()) return;
+        const g = lay.meas[i];
+        out.push(`<rect x="${f1(g.x + 5)}" y="${f1(yy - 13)}" width="${f1(Math.max(8, g.w - 10))}" height="16" rx="3" fill="none" stroke="${cur ? '#60a5fa' : '#b7c3de'}" stroke-width="1" stroke-dasharray="3 3"/>`);
+      });
+    });
     // 오선 (줄마다)
     tops.forEach(t => { for (let k = 0; k < 5; k++) out.push(`<line x1="${sys.x0}" y1="${f1(t + k * SP)}" x2="${sys.x1}" y2="${f1(t + k * SP)}" stroke="#222" stroke-width="1"/>`); });
     // 맨 앞 세로줄: 모든 줄을 이어요
@@ -948,7 +965,7 @@ function drawMeasure(s, ctxs, lay, sys, i, k, out, o) {
   sys.verses.forEach((v, row) => {
     const syl = parseLyrics(m.lyrics[v]);
     if (!syl.length) return;
-    const yy = bot + 25 + row * 21 + Math.max(0, (sys.lyrShift || 0));
+    const yy = lyrRowY(sys, row);
     let lastX = null, lastW = 0;
     syl.forEach((sy, kk) => {
       const tg = sylTargets[kk];
