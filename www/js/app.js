@@ -2,11 +2,21 @@
 /* ===== BFlat Studio — 편집기 / 화면 ===== */
 const $ = (sel, el) => (el || document).querySelector(sel);
 const $$ = (sel, el) => [...(el || document).querySelectorAll(sel)];
-const MODES = [['note', '음표', 'F1'], ['harm', '화음', 'H'], ['slur', '이음줄', 'F2'], ['bar', '마디선', 'F3'], ['chord', '코드', 'F4'], ['lyric', '가사', 'F5'], ['form', '송폼', 'F6'], ['measure', '마디 편집', 'F7']];
+// 'slur' 모드 = 악상기호 탭 (이음줄·붙임줄 · 스타카토 등 · 셈여림 · 크레셴도)
+const MODES = [['note', '음표', 'F1'], ['slur', '악상기호', 'F2'], ['harm', '화음', 'H'], ['chord', '코드', 'F3'], ['lyric', '가사', 'F4'], ['bar', '마디선', 'F5'], ['form', '송폼', 'F6'], ['measure', '마디 편집', 'F7']];
+const FKEY_MODES = ['note', 'slur', 'chord', 'lyric', 'bar', 'form', 'measure'];   // F1 ~ F7
 const FORMS = ['Intro', 'Verse', 'Pre-Chorus', 'Chorus', 'Bridge', 'Interlude', 'Solo', 'Outro', 'Ending'];
-const DYNS = ['ppp', 'pp', 'p', 'mp', 'mf', 'f', 'ff', 'fff'];
-const ARTS = [['accent', '>', '악센트'], ['staccato', '·', '스타카토'], ['tenuto', '–', '테누토'], ['marcato', '^', '마르카토'], ['fermata', '𝄐', '늘임표'], ['x', '✕', '박자치기 (X 머리 · 손뼉·말하듯 리듬만)']];
+// 셈여림표: [기호, 한국어 뜻, English, 日本語]
+const DYN_GROUPS = [
+  [['셈여림', 'Dynamics', '強弱'], [['ppp', '가능한 한 여리게', 'as soft as possible', 'できるだけ弱く'], ['pp', '매우 여리게', 'very soft', 'とても弱く'], ['p', '여리게', 'soft', '弱く'], ['mp', '조금 여리게', 'moderately soft', 'やや弱く'], ['mf', '조금 세게', 'moderately loud', 'やや強く'], ['f', '세게', 'loud', '強く'], ['ff', '매우 세게', 'very loud', 'とても強く'], ['fff', '가능한 한 세게', 'as loud as possible', 'できるだけ強く']]],
+  [['갑자기 변하는', 'Sudden', '急な変化'], [['sf', '그 음만 특히 세게', 'that note strongly', 'その音だけ特に強く'], ['sfz', '그 음만 특히 세게', 'that note strongly', 'その音だけ特に強く'], ['sfp', '세게 친 뒤 바로 여리게', 'loud, then soft at once', '強く、すぐ弱く'], ['fp', '세게 친 뒤 바로 여리게', 'loud, then soft at once', '強く、すぐ弱く'], ['rf', '갑자기 세게', 'suddenly loud', '急に強く'], ['rfz', '갑자기 세게', 'suddenly loud', '急に強く'], ['subito p', '갑자기 여리게', 'suddenly soft', '急に弱く'], ['subito f', '갑자기 세게', 'suddenly loud', '急に強く']]],
+  [['점점 변하는', 'Gradual', 'だんだん変化'], [['cresc.', '점점 세게', 'gradually louder', 'だんだん強く'], ['decresc.', '점점 여리게', 'gradually softer', 'だんだん弱く'], ['dim.', '점점 여리게', 'gradually softer', 'だんだん弱く'], ['morendo', '사라지듯 점점 여리게', 'dying away', '消えるように'], ['smorzando', '꺼지듯 점점 여리게', 'fading out', '消え入るように']]]];
+const DYNS = DYN_GROUPS.flatMap(g => g[1].map(d => d[0]));
+// 악상기호 탭 단추 순서: 스타카토 · 늘임표 · 악센트 · 테누토 · 마르카토 · 박자치기
+const ARTS = [['staccato', '·', '스타카토'], ['fermata', '𝄐', '늘임표'], ['accent', '>', '악센트'], ['tenuto', '–', '테누토'], ['marcato', '^', '마르카토'], ['x', '✕', '박자치기 (X 머리 · 손뼉·말하듯 리듬만)']];
 const DUR_GLYPH = { w: '𝅝', h: '𝅗𝅥', q: '♩', e: '♪', s: '𝅘𝅥𝅯' };
+const REST_GLYPH = { w: '𝄻', h: '𝄼', q: '𝄽', e: '𝄾', s: '𝄿' };
+const REST_KO = { w: ['온쉼표', 'Whole rest', '全休符'], h: ['2분쉼표', 'Half rest', '2分休符'], q: ['4분쉼표', 'Quarter rest', '4分休符'], e: ['8분쉼표', 'Eighth rest', '8分休符'], s: ['16분쉼표', '16th rest', '16分休符'] };
 const MAX_VERSES = 10;   // 가사 절은 10절까지
 
 const App = {
@@ -86,7 +96,7 @@ function render() {
   // 한 줄에 다 안 들어가면(마디 여백을 줄여도 음표·가사·계이름이 겹치면) 그 줄을 나눠요
   //  (조옮김으로 ♭·♯ 계이름이 넓어졌을 때, 계이름을 켰을 때, 음표를 많이 넣었을 때)
   if (!App.blank && App.lay.systems.some(sy => sy.overflow && sy.idxs.length > 1 && !sy.packed) && refitLines(s, lopt)) App.lay = computeLayout(s, App.ctxs, lopt);
-  const st = { sel: App.sel, selMeasures: App.selMeasures, mode: App.mode, write: App.write, verse: App.verse, playStart: App.playStart, selSlur: App.selSlur, slurHandleR: isTouchUI() ? Math.max(6, 8 / App.zoom) : 4, selBar: App.selBar, widthEdit: App.widthEdit, chordEdit: App.chordEdit, hoverMeasure: App.hoverMeasure, scoreFont: App.settings.scoreFont, staff: curStaff(), head: App.head, hc: App.hc };
+  const st = { sel: App.sel, selMeasures: App.selMeasures, mode: App.mode, write: App.write, verse: App.verse, playStart: App.playStart, selSlur: App.selSlur, selHp: App.selHp, slurHandleR: isTouchUI() ? Math.max(6, 8 / App.zoom) : 4, selBar: App.selBar, widthEdit: App.widthEdit, chordEdit: App.chordEdit, hoverMeasure: App.hoverMeasure, scoreFont: App.settings.scoreFont, staff: curStaff(), head: App.head, hc: App.hc };
   const pages = App.blank ? [] : renderScore(s, App.ctxs, App.lay, st);
   const z = App.zoom;
   // 열려 있는 코드·가사 입력칸은 다시 그려도 그대로 (마우스가 다른 마디로 가도 쓰던 글이 안 사라져요)
@@ -125,7 +135,8 @@ function updateStatus() {
   $$('.need-sel').forEach(b => b.disabled = !has);
   const ns = selNotes();
   $$('[data-art]').forEach(b => b.classList.toggle('on', has && ns.every(x => (x.n.art || []).includes(b.dataset.art))));
-  $$('[data-dur]').forEach(b => b.classList.toggle('on', has ? ns.some(x => x.n.dur === b.dataset.dur) : App.curDur === b.dataset.dur));
+  $$('[data-dur]').forEach(b => b.classList.toggle('on', has ? ns.some(x => !x.n.rest && x.n.dur === b.dataset.dur) : App.curDur === b.dataset.dur));
+  $$('[data-rdur]').forEach(b => b.classList.toggle('on', has && ns.some(x => x.n.rest && (x.n.full ? 'w' : x.n.dur) === b.dataset.rdur)));
   const dotB = $('#bDot'); if (dotB) dotB.classList.toggle('on', has && ns.every(x => x.n.dots));
   const triB = $('#bTri'); if (triB) triB.classList.toggle('on', has && ns.every(x => x.n.tri));
   const grB = $('#bGrace'); if (grB) grB.classList.toggle('on', has && ns.every(x => x.n.gr && x.n.gr.length));
@@ -134,7 +145,7 @@ function updateStatus() {
   const dynS = $('#selDyn'); if (dynS) { dynS.disabled = !has; dynS.value = has && ns[0] && ns[0].n.dyn ? ns[0].n.dyn : ''; }
   const wb = $('#bWrite'); if (wb) { wb.classList.toggle('on', App.write); wb.innerHTML = `✎ 쓰기 모드 ${App.write ? '켬' : '끔'}`; }
   const tb = $('#bTieToggle'); if (tb) { const sl = S().slurs.find(x => x.id === App.selSlur); tb.disabled = !sl; tb.textContent = sl && sl.type === 'tie' ? '이음줄로 바꾸기' : '붙임줄로 바꾸기'; }
-  const td = $('#bSlurDel'); if (td) td.disabled = !App.selSlur;
+  const td = $('#bSlurDel'); if (td) td.disabled = !App.selSlur && !App.selHp;
   $$('[data-verse]').forEach(b => b.classList.toggle('on', +b.dataset.verse === App.verse));
   $$('[data-lyrunit]').forEach(b => b.classList.toggle('on', b.dataset.lyrunit === App.lyrUnit));
   const we = $('#bWidthEdit'); if (we) we.classList.toggle('on', App.widthEdit);
@@ -150,7 +161,7 @@ function setMode(m) {
   closeEditors(); closePop();
   const from = App.mode;
   App.mode = m;
-  App.selSlur = null; App.chordEdit = null;
+  App.selSlur = null; App.selHp = null; App.chordEdit = null;
   App.head = null; App.lastTone = null;
   if (m === 'harm') {
     App.write = false;
@@ -174,33 +185,34 @@ function buildSubbar() {
   let h = '';
   if (m === 'note') {
     h = `<div class="hint narrow">마디 오른쪽 위 ♩ 버튼 / Caps Lock = 음표 개수 고르기 · 길이 = 3:16분음표 \`:8분음표 1:4분음표 2:2분음표 4:온음표 · ↑↓ = 음높이 · H = 화음 · Alt+↑↓ = 줄 바꾸기 · ←→/Enter = 다음 음표 · 빈 곳 끌기 = 여러 개 고르기 · 고른 음표 끌기 = 다른 마디로 · N = 쓰기 모드</div>
-    <div class="sub-rows"><div class="sub-row">
-    <button class="btn" id="bWrite" data-act="toggleWrite">✎ 쓰기 모드 끔</button>
-    <div class="seg">${['w', 'h', 'q', 'e', 's'].map(d => `<button class="btn mus" data-dur="${d}" title="${DUR_KO[d]} (${Object.keys(NUMKEY_DUR).find(k => NUMKEY_DUR[k] === d)})">${DUR_GLYPH[d]}</button>`).join('')}</div>
-    <button class="btn" id="bDot" data-act="dot" title="점 붙이기 (.)">점 붙이기 •</button>
-    <button class="btn need-sel" id="bTri" data-act="tri" title="셋잇단 (T)">셋잇단</button>
-    <span class="sep"></span>
-    <div class="seg">${ARTS.map(([k, g, t]) => `<button class="btn need-sel art" data-art="${k}" title="${t}">${g}</button>`).join('')}<button class="btn art" id="bSlur" data-act="slurTool" title="이음줄 (S) — 고른 음표에 달기 · 악보의 이음줄을 누르면 여기서 고치기">${SLUR_ICON}</button><button class="btn need-sel art" id="bGrace" data-act="grace" title="꾸밈음 (앞꾸밈음) — 고른 음표 앞에 작은 음 · ↑↓ = 꾸밈음 높이">꾸밈음</button></div>
-    <div class="seg">${[[-1, '♭', '플랫 (반음 내림)'], [0, '♮', '제자리표'], [1, '♯', '샵 (반음 올림)']].map(([a, g, t]) => `<button class="btn need-sel art acc" data-act="acc" data-acc="${a}" title="${t} — 고른 음표에 · 다시 누르면 조표대로">${g}</button>`).join('')}</div>
-    </div><div class="sub-row">
-    <select id="selDyn" class="btn need-sel" title="셈여림"><option value="">셈여림</option>${DYNS.map(d => `<option value="${d}">${d}</option>`).join('')}<option value="-">지우기</option></select>
-    <button class="btn need-sel" data-act="text" title="템포·표현 글자 (rit., Swing, ♩=100 …)">글자…</button>
-    <span class="sep"></span>
-    <button class="btn primary" data-act="fillAll">모든 부족한 박자를 쉼표로 채움</button>
-    <button class="btn outline" data-act="fillWorked">작업한 마디만 쉼표로 채움</button>
-    <span class="sep"></span>
-    <button class="btn" data-act="toMeasure">줄·마디 편집 →</button>
-    ${statusButtons()}</div></div>`;
+    <button class="btn touch-only" id="bWrite" data-act="toggleWrite">✎ 쓰기 모드 끔</button>
+    ${durRestButtons(false)}
+    <button class="btn" id="bDot" data-act="dot" title="점 붙이기 (.)">점 붙이기 •</button>`;
   } else if (m === 'harm') {
     h = `<div class="hint"><b class="lock">🔒 멜로디 잠김</b> · ←→/클릭 = 화음 넣을 자리 · 길이 키(3 \` 1 2 4) = 그 자리에 화음 음 (리듬 따로 · 마디당 16개까지) · . = 점 · 0 = 쉼표 · ↑↓/A~G = 높이 · Insert = 한 음 더 · Delete = 지우기 · Esc/H = 끝</div>
-    <div class="seg">${['w', 'h', 'q', 'e', 's'].map(d => `<button class="btn mus" data-dur="${d}" title="${DUR_KO[d]} 화음 음 얹기 (${Object.keys(NUMKEY_DUR).find(k => NUMKEY_DUR[k] === d)})">${DUR_GLYPH[d]}</button>`).join('')}</div>
+    ${durRestButtons(true)}
     <button class="btn" id="bDot" data-act="dot" title="방금 얹은 화음 음에 점 (.)">점 붙이기 •</button>
-    <button class="btn" id="bHRest" data-act="harmRest" title="화음 성부 쉼표 (0) — 그 자리 화음 음 ↔ 쉼표">쉼표 (0)</button>
     <span class="sep"></span>
     <button class="btn primary" data-act="harmDone">화음 쌓기 끝 → 음표</button>`;
   } else if (m === 'slur') {
-    h = `<div class="hint one">음표를 누른 채 다른 음표로 끌어 놓기 = 이음줄 · 줄을 누른 채 끌기 = 옮기기 (끝 ○ = 한쪽만 · 다른 마디로도) · 우클릭·Delete = 지우기 · ←→ = 한 음씩 · T = 붙임줄 ↔ 이음줄</div>
-    <button class="btn" id="bTieToggle" data-act="toggleTie" disabled>붙임줄로 바꾸기</button><button class="btn" id="bSlurDel" data-act="delSlur" disabled>지우기</button>`;
+    // 악상기호 탭: 음표를 눌러 고르고 → 단추로 달기
+    const T = (ko, en, ja) => esc(LG(ko, en, ja));
+    h = `<div class="hint narrow">${LG('음표 클릭 = 고르기 (Shift·Ctrl = 여러 개 · 빈 곳 끌기 = 한꺼번에) · 음표를 누른 채 다른 음표로 끌기 = 이음줄 · 이음줄·크레셴도를 누르면 고치기 (끝 ○ 끌기 = 길이) · Delete = 지우기 · T = 붙임줄 ↔ 이음줄',
+      'Click a note = select (Shift/Ctrl = more · drag on empty space = many) · drag from a note to another = slur · click a slur or hairpin to edit it (drag an end ○ = length) · Delete = remove · T = tie ↔ slur',
+      '音符クリック = 選択 (Shift・Ctrl = 複数 · 空白をドラッグ = まとめて) · 音符から別の音符へドラッグ = スラー · スラー・クレシェンドをクリックで編集 (端の○をドラッグ = 長さ) · Delete = 削除 · T = タイ ↔ スラー')}</div>
+    <div class="sub-rows"><div class="sub-row">
+    <div class="seg"><button class="btn art" id="bSlur" data-act="slurTool" title="${T('이음줄 (S) — 고른 음표에 달기 · 악보의 이음줄을 누르면 여기서 고치기', 'Slur (S) — on the selected notes · click a slur in the score to edit it', 'スラー (S) — 選んだ音符に · 楽譜のスラーをクリックで編集')}">${SLUR_ICON}</button><button class="btn need-sel" data-act="tieTool" title="${T('붙임줄 (+) — 고른 음표와 바로 다음 음을 같은 높이로 이어요', 'Tie (+) — joins the selected note to the next one at the same pitch', 'タイ (+) — 選んだ音符と次の音を同じ高さでつなぐ')}">${T('붙임줄', 'Tie', 'タイ')}</button></div>
+    <div class="seg">${ARTS.map(([k, g, t]) => `<button class="btn need-sel art" data-art="${k}" title="${t}">${g}</button>`).join('')}</div>
+    <button class="btn need-sel" id="bGrace" data-act="grace" title="꾸밈음 (앞꾸밈음) — 고른 음표 앞에 작은 음 · ↑↓ = 꾸밈음 높이">꾸밈음</button>
+    <button class="btn need-sel" id="bTri" data-act="tri" title="셋잇단 (T)">셋잇단</button>
+    <div class="seg">${[[-1, '♭', '플랫 (반음 내림)'], [0, '♮', '제자리표'], [1, '♯', '샵 (반음 올림)']].map(([a, g, t]) => `<button class="btn need-sel art acc" data-act="acc" data-acc="${a}" title="${t} — 고른 음표에 · 다시 누르면 조표대로">${g}</button>`).join('')}</div>
+    </div><div class="sub-row">
+    <select id="selDyn" class="btn need-sel" title="${T('셈여림 — 고른 음표에', 'Dynamics — on the selected note', '強弱 — 選んだ音符に')}"><option value="">${T('셈여림', 'Dynamics', '強弱')}</option>${DYN_GROUPS.map(([gl, list]) => `<optgroup label="${esc(LG(...gl))}">${list.map(([d, ko, en, ja]) => `<option value="${esc(d)}">${esc(d)} · ${esc(LG(ko, en, ja))}</option>`).join('')}</optgroup>`).join('')}<option value="-">${T('지우기', 'Remove', '削除')}</option></select>
+    <div class="seg"><button class="btn need-sel art hp" data-act="hp" data-hp="cresc" title="${T('크레셴도 (점점 세게) — 고른 음표 처음~끝 · 끝 ○ 을 끌어 길이를 바꿔요', 'Crescendo (gradually louder) — over the selected notes · drag an end ○ to change the length', 'クレシェンド — 選んだ音符の最初〜最後 · 端の○をドラッグで長さ')}">${HP_ICON.cresc}</button><button class="btn need-sel art hp" data-act="hp" data-hp="dim" title="${T('데크레셴도 (점점 여리게) — 고른 음표 처음~끝 · 끝 ○ 을 끌어 길이를 바꿔요', 'Decrescendo (gradually softer) — over the selected notes · drag an end ○ to change the length', 'デクレシェンド — 選んだ音符の最初〜最後 · 端の○をドラッグで長さ')}">${HP_ICON.dim}</button></div>
+    <button class="btn need-sel" data-act="text" title="템포·표현 글자 (rit., Swing, ♩=100 …)">글자…</button>
+    <span class="sep"></span>
+    <button class="btn" id="bTieToggle" data-act="toggleTie" disabled>붙임줄로 바꾸기</button><button class="btn" id="bSlurDel" data-act="delSlur" disabled>지우기</button>
+    ${statusButtons()}</div></div>`;
   } else if (m === 'bar') {
     h = `<div class="hint one">마디선 클릭 = 도돌이표·겹세로줄·끝세로줄 · 마디 클릭 = 1·2번 괄호, D.S., Coda, Fine · 끌기·Shift+클릭 = 여러 마디에 괄호를 한꺼번에</div>`;
   } else if (m === 'chord') {
@@ -229,11 +241,26 @@ function buildSubbar() {
     <span class="mini">마디 폭</span>
     <button class="btn" id="bWidthEdit" data-act="widthEdit">직접 수정</button>
     <button class="btn" data-act="widthSame">이 줄 똑같이</button>
-    <button class="btn" data-act="widthAuto">자동 수정</button>`;
+    <button class="btn" data-act="widthAuto">자동 수정</button>
+    <span class="sep"></span>
+    <button class="btn need-msel" data-act="multiRest" title="${esc(LG('고른 마디부터 여러 마디를 쉬어요 — 한 마디에 온쉼표와 숫자로 그려요 (몇 마디인지는 숫자로)', 'Rest for several measures from the selected one — drawn as one measure with a whole rest and a number', '選んだ小節から何小節か休み — 1小節に全休符と数字で表示'))}"><span class="mus">𝄻</span> ${LG('여러 마디 쉼표', 'Multi-measure rest', '複数小節休符')}</button>
+    <span class="sep"></span>
+    <button class="btn primary" data-act="fillAll">모든 부족한 박자를 쉼표로 채움</button>
+    <button class="btn outline" data-act="fillWorked">작업한 마디만 쉼표로 채움</button>`;
   }
-  sb.innerHTML = m === 'note' ? h : h + statusButtons();   // 음표 탭은 둘째 버튼 줄 끝에 이미 넣었어요
+  sb.innerHTML = m === 'slur' ? h : h + statusButtons();   // 악상기호 탭은 둘째 버튼 줄 끝에 이미 넣었어요
   updateStatus();
 }
+/** 음표·화음 탭: 음표 길이 5개 + 쉼표 길이 5개 단추 */
+function durRestButtons(harm) {
+  const key = d => Object.keys(NUMKEY_DUR).find(k => NUMKEY_DUR[k] === d);
+  return `<div class="seg">${['w', 'h', 'q', 'e', 's'].map(d => `<button class="btn mus" data-dur="${d}" title="${DUR_KO[d]}${harm ? ' 화음 음 얹기' : ''} (${key(d)})">${DUR_GLYPH[d]}</button>`).join('')}</div>
+    <div class="seg">${['w', 'h', 'q', 'e', 's'].map(d => `<button class="btn mus rest" data-act="restDur" data-rdur="${d}" title="${esc(LG(...REST_KO[d]))}${harm ? esc(LG(' — 그 자리에 화음 성부 쉼표', ' — harmony-voice rest here', ' — その位置に和音声部の休符')) : esc(LG(' — 고른 음표를 이 쉼표로 · 빈 마디를 골랐으면 쉼표 넣기 (0)', ' — turns the selected notes into this rest · adds one to a selected empty measure (0)', ' — 選んだ音符をこの休符に · 空の小節なら休符を入れる (0)'))}">${REST_GLYPH[d]}</button>`).join('')}</div>`;
+}
+const HP_ICON = {
+  cresc: '<svg width="26" height="14" viewBox="0 0 26 14" aria-hidden="true"><path d="M24 2 L2 7 L24 12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+  dim: '<svg width="26" height="14" viewBox="0 0 26 14" aria-hidden="true"><path d="M2 2 L24 7 L2 12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>'
+};
 
 /* ---------- 음표 편집 ---------- */
 function editNotes(fn) {
@@ -242,12 +269,18 @@ function editNotes(fn) {
   commit(() => ns.forEach(x => { fn(x.n, x); x.n.edited = true; }));
   return true;
 }
-function setDur(d) {
+/** 길이 키·단추 · asNote = 음표 단추를 누른 것 (쉼표를 골랐으면 음표로 바꿔요 · 길이 키는 쉼표 길이만 바꿔요) */
+function setDur(d, asNote) {
   // 화음 탭: 길이 키 = 고른 멜로디 음 위에 그 길이로 음 하나 얹기 (멜로디는 그대로)
-  if (App.mode === 'harm') return harmPlace(d);
+  if (App.mode === 'harm') {
+    const hc = App.hc, ex = asNote && hc && harmAt(hc.mi, hc.si, hc.t);
+    harmPlace(d);
+    if (ex && ex.rest) { const now = harmAt(hc.mi, hc.si, hc.t); if (now && now.rest && now.dur === d) harmRest(); }
+    return;
+  }
   if (!App.sel.length) { App.curDur = d; updateStatus(); toast(`${DUR_KO[d]}로 쓰기`); return; }
   App.curDur = d;
-  editNotes(n => { n.dur = d; n.full = false; n.ph = false; });
+  editNotes((n, x) => { n.dur = d; n.full = false; n.ph = false; if (asNote && n.rest && !x.ov) { n.rest = false; if (!n.p) n.p = defaultPitch(x.si); } });
 }
 /** . = 고른 음표에 바로 점 붙이기/떼기 (화음 탭에서는 방금 얹은 화음 음에) */
 function toggleDot() {
@@ -478,6 +511,139 @@ function setAccidental(a) {
     heads(n).forEach(k => { const p = headPitch(n, k); if (p) setHeadPitch(n, k, { d: p.d, a: all ? keyAlter(key, mod(p.d, 7)) : a }); });
   });
   if (ok) previewSel();
+}
+/** 쉼표 단추: 고른 음표 → 그 길이 쉼표 · 빈 마디를 골랐으면 쉼표 하나 넣기 · 화음 탭은 그 자리에 화음 성부 쉼표 */
+function setRestDur(d) {
+  if (App.mode === 'harm') {
+    if (!App.hc) { toast('화음 넣을 자리를 먼저 고르세요 (클릭 또는 ←→)'); return; }
+    harmPlace(d);
+    const hc = App.hc, ex = hc && harmAt(hc.mi, hc.si, hc.t);
+    if (ex && ex.dur === d && !ex.rest) harmRest();
+    return;
+  }
+  App.curDur = d;
+  if (!App.sel.length) {
+    const em = emptyCursor();
+    if (em !== null) return addToEmptyMeasure(em, 'rest');
+    toast(LG('쉼표로 바꿀 음표(또는 빈 마디)를 먼저 고르세요', 'Select notes (or an empty measure) first', '休符にする音符(または空の小節)を先に選んでください'));
+    updateStatus(); return;
+  }
+  editNotes(n => { n.rest = true; n.dur = d; n.full = false; n.ph = false; n.ps = []; delete n.gr; });
+  App.head = null;
+}
+/* ----- 크레셴도 · 데크레셴도 (헤어핀): s.hairpins = [{ id, type: 'cresc'|'dim', si, a: { m: 마디 id, t }, b: { m, t } }]
+ *  양 끝은 박 위치(틱)라서 음표와 상관없이 자유롭게 늘이고 줄여요 */
+function hpIndex() { const map = new Map(); S().measures.forEach((m, i) => map.set(m.id, i)); return map; }
+function addHairpin(type) {
+  const ns = selNotes().filter(x => !x.ov);
+  if (!ns.length) { toast(LG('크레셴도·데크레셴도를 달 음표를 먼저 고르세요 (여러 개 = 처음~끝)', 'Select notes first (several = first to last)', '先に音符を選んでください (複数 = 最初〜最後)')); return; }
+  const first = ns[0], last = ns[ns.length - 1];
+  const ms = S().measures;
+  const endT = noteStart(last) + noteTicks(last.n, App.ctxs[last.mi].cap);
+  const hp = { id: uid(), type, si: first.si, a: { m: ms[first.mi].id, t: noteStart(first) }, b: { m: ms[last.mi].id, t: Math.max(endT, noteStart(first) + 1) } };
+  if (ns.length === 1 && endT - noteStart(first) < App.ctxs[first.mi].beat) hp.b.t = Math.min(App.ctxs[first.mi].cap, noteStart(first) + App.ctxs[first.mi].beat * 2);
+  commit(() => { S().hairpins = (S().hairpins || []).concat(hp); });
+  App.selHp = hp.id; App.selSlur = null;
+  render();
+  toast(LG('양 끝 ○ 을 끌어 길이를 바꿔요 · 가운데를 끌면 통째로 옮겨요 · Delete = 지우기', 'Drag an end ○ to change the length · drag the middle to move it · Delete = remove', '端の○をドラッグで長さ · 真ん中をドラッグで移動 · Delete = 削除'), 3200);
+}
+function deleteHairpin() {
+  const id = App.selHp; if (!id) return;
+  commit(() => { S().hairpins = (S().hairpins || []).filter(x => x.id !== id); });
+  App.selHp = null; render();
+}
+/** 누른 곳의 헤어핀: 고른 것의 끝 ○ 먼저 · 그다음 몸통 */
+function hpGrab(p) {
+  const lay = App.lay; if (!lay || !lay.hps) return null;
+  const tol = isTouchUI() ? Math.max(8, 20 / App.zoom) : 7;
+  const ends = App.selHp && lay.hpEnds && lay.hpEnds[App.selHp];
+  if (ends) for (const k of ['a', 'b']) { const e = ends[k]; if (e && e.page === p.page && Math.hypot(e.x - p.x, e.y - p.y) < tol + 2) return { id: App.selHp, end: k }; }
+  for (const sg of lay.hps) if (sg.page === p.page && p.x >= sg.x1 - 3 && p.x <= sg.x2 + 3 && Math.abs(p.y - sg.y) < sg.h / 2 + tol) return { id: sg.id, end: 'both' };
+  return null;
+}
+/** 악보 위 한 점 → 헤어핀 끝 자리 { m, t } (마디 안 박 위치 · 자유롭게) */
+function hpPosAt(pt) {
+  const h = hit(pt); if (!h || !h.g) return null;
+  const g = h.g.hidden ? App.lay.meas[h.g.mrFirst] : h.g;
+  const t = Math.max(0, Math.min(App.ctxs[g.mi].cap, Math.round(xTick(g, pt.x))));
+  return { m: S().measures[g.mi].id, t };
+}
+function hpOrder(pos, idx) { return idx.get(pos.m) * 1e6 + pos.t; }
+function startHpDrag(gr, p) {
+  const hp = (S().hairpins || []).find(x => x.id === gr.id); if (!hp) return;
+  App.selHp = hp.id; App.selSlur = null; App.sel = [];
+  const ends = App.lay.hpEnds[hp.id];
+  App.drag = { type: 'hp', id: hp.id, end: gr.end, p0: p, a0: { ...hp.a }, b0: { ...hp.b }, ea: ends && ends.a, eb: ends && ends.b, pushed: false, moved: false };
+  render();
+}
+function moveHpDrag(p) {
+  const d = App.drag, hp = (S().hairpins || []).find(x => x.id === d.id); if (!hp || !p) return;
+  if (!d.moved && Math.hypot(p.x - d.p0.x, p.y - d.p0.y) < 3) return;
+  const idx = hpIndex();
+  let a = hp.a, b = hp.b;
+  if (d.end === 'a') a = hpPosAt(p) || a;
+  else if (d.end === 'b') b = hpPosAt(p) || b;
+  else if (d.ea && d.eb) {
+    const dx = p.x - d.p0.x, dy = p.y - d.p0.y;
+    const na = hpPosAt({ page: d.ea.page, x: d.ea.x + dx, y: d.ea.y + dy }), nb = hpPosAt({ page: d.eb.page, x: d.eb.x + dx, y: d.eb.y + dy });
+    if (na && nb) { a = na; b = nb; }
+  }
+  if (hpOrder(b, idx) - hpOrder(a, idx) < 2) return;   // 끝이 처음보다 앞으로 넘어가지 않게
+  if (!d.pushed) { History.push(S()); d.pushed = true; }
+  d.moved = true;
+  hp.a = a; hp.b = b;
+  render();
+}
+/* ----- 여러 마디 쉼표: 쉬는 마디 N개 → 다른 탭·인쇄에서 한 마디에 온쉼표 + 숫자 ----- */
+function multiRestDialog() {
+  if (!App.selMeasures.length) { toast(LG('쉬는 마디로 만들 마디를 먼저 고르세요', 'Select a measure first', '先に小節を選んでください')); return; }
+  const mi0 = Math.min(...App.selMeasures), mi1 = Math.max(...App.selMeasures);
+  const s = S();
+  let a = mi0, cur = mi1 - mi0 + 1;
+  restRuns(s, App.ctxs).forEach((e, i) => { if (mi0 >= i && mi0 <= e) { a = i; cur = Math.max(cur, e - i + 1); } });
+  const hasNotes = Array.from({ length: cur }, (_, k) => s.measures[a + k]).some(m => m && App.ctxs[s.measures.indexOf(m)].status !== 'empty' && !isRestMeasure(s, App.ctxs[s.measures.indexOf(m)], m));
+  const def = cur > 1 ? cur : 4;
+  modal(`<h2>${LG('𝄻 여러 마디 쉼표', '𝄻 Multi-measure rest', '𝄻 複数小節休符')}</h2>
+    <p class="muted">${LG(`${a + 1}마디부터 쉬는 마디 수를 정해요. 다른 탭과 인쇄에서는 <b>한 마디에 온쉼표와 숫자</b>로 보여요 (마디 편집 탭에서는 한 마디씩 펼쳐서 보여요). 폭은 이 악보의 보통 마디 폭으로 자동으로 맞춰요.`, `How many measures to rest, starting at m.${a + 1}. Other tabs and printing show them as <b>one measure with a whole rest and a number</b> (the Measures tab shows them one by one). The width follows this score's usual measure width.`, `${a + 1}小節から休む小節数を決めます。他のタブと印刷では<b>1小節に全休符と数字</b>で表示されます (小節編集タブでは1小節ずつ表示)。幅はこの楽譜の普通の小節幅に自動で合わせます。`)}</p>
+    ${hasNotes ? `<p class="warn">${LG('⚠ 고른 마디에 있는 음표·코드·가사는 지워져요', '⚠ Notes, chords and lyrics in the selected measures will be removed', '⚠ 選んだ小節の音符・コード・歌詞は消えます')}</p>` : ''}
+    <label class="fld">${LG('쉬는 마디 수', 'Measures to rest', '休む小節数')} <input class="inp" id="mrN" type="number" min="2" max="200" value="${def}"></label>
+    <div class="modal-btns"><button class="btn" data-close>${LG('취소', 'Cancel', 'キャンセル')}</button><button class="btn primary" data-ok>${LG('만들기', 'Create', '作成')}</button></div>`, md => {
+    const inp = md.querySelector('#mrN'); setTimeout(() => inp.select(), 0);
+    md.querySelector('[data-ok]').addEventListener('click', () => {
+      const n = Math.round(+inp.value);
+      if (!(n >= 2 && n <= 200)) { toast(LG('2 ~ 200 사이 숫자를 넣어 주세요', 'Enter a number from 2 to 200', '2〜200の数を入れてください')); return; }
+      closeModal(); applyMultiRest(a, cur, n);
+    });
+  });
+}
+function applyMultiRest(a, cur, n) {
+  const s = S();
+  const restMeasure = m => {
+    removeSlursFor(measureAllNotes(m).map(x => x.id));
+    for (let si = 0; si < nStaves(); si++) { const r = newNote('w', null, true); r.full = true; r.edited = true; setSN(m, si, [r]); OV(m, si).splice(0); }
+    m.chords = []; m.lyrics = {}; m.width = 0;
+  };
+  commit(() => {
+    const keep = Math.min(cur, n);
+    for (let k = 0; k < keep; k++) restMeasure(s.measures[a + k]);
+    const lastOld = a + cur - 1;
+    if (n > cur) {
+      const add = Array.from({ length: n - cur }, () => { const m = newMeasure(); restMeasure(m); return m; });
+      insertMeasures(lastOld + 1, add, lineOf(lastOld).li);
+      // 끝 세로줄(겹세로줄 등)은 묶음의 마지막 마디로 옮겨야 한 묶음이 돼요
+      const first = s.measures[a + cur - 1], last = s.measures[a + n - 1];
+      if (first.end) { last.end = first.end; first.end = ''; }
+    } else if (n < cur) {
+      const endMark = s.measures[lastOld].end;
+      deleteMeasures(Array.from({ length: cur - n }, (_, k) => a + n + k));
+      if (endMark) s.measures[a + n - 1].end = endMark;
+    }
+    // 묶음 안 마디의 끝 세로줄은 마지막 마디에만
+    for (let k = 0; k < n - 1; k++) if (s.measures[a + k].end) { s.measures[a + n - 1].end = s.measures[a + n - 1].end || s.measures[a + k].end; s.measures[a + k].end = ''; }
+  });
+  App.selMeasures = Array.from({ length: n }, (_, k) => a + k);
+  render();
+  toast(LG(`${n}마디 쉼표를 만들었어요 · 다른 탭과 인쇄에서는 한 마디에 숫자 ${n}으로 보여요`, `Made a ${n}-measure rest · other tabs and printing show one measure with "${n}"`, `${n}小節の休符を作りました · 他のタブと印刷では1小節に数字${n}で表示`), 3600);
 }
 function setLetter(L) {
   const hd = App.head;
@@ -1227,6 +1393,9 @@ function onMouseDown(e) {
   const h = hit(p);
   // 줄 맨 앞 음자리표를 누르면 음자리표 바꾸기 (가온음자리표는 줄 위치 옮기기)
   if (h.sys && h.header && p.x < h.sys.x0 + 36 && h.zone === 'staff') { clefMenu(h.si || 0, e.clientX, e.clientY); return; }
+  // 악상기호 탭: 크레셴도·데크레셴도 잡기 (끝 ○ = 길이 · 가운데 = 통째로 옮기기)
+  if (App.mode === 'slur') { const hg = hpGrab(p); if (hg) { startHpDrag(hg, p); return; } }
+  if (App.selHp) { App.selHp = null; updateStatus(); }
   // 이음줄·붙임줄 잡기 (이음줄 모드 · 음표 모드 쓰기 끔): 누른 채 끌면 다른 음표·다른 마디로 옮겨요
   //  (터치 화면은 쓰기 모드에서도 이음줄을 누르면 골라요 · 음표 넣기와 헷갈리지 않게 줄 가까이만)
   if (App.mode === 'slur' || (App.mode === 'note' && (!App.write || isTouchUI()))) {
@@ -1252,8 +1421,12 @@ function onMouseDown(e) {
     return;
   }
   if (m === 'slur') {
-    if (h.note) { App.drag = { type: 'slur', from: h.note, p0: p }; return; }
-    App.selSlur = hitSlur(p); render(); return;
+    // 음표: 누르고 떼면 고르기 · 다른 음표로 끌어 놓으면 이음줄
+    if (h.note) { App.drag = { type: 'slur', from: h.note, p0: p, add: e.shiftKey || e.ctrlKey }; return; }
+    const sl = hitSlur(p); if (sl) { App.selSlur = sl; render(); return; }
+    // 빈 곳 끌기 = 여러 음표 한꺼번에 고르기
+    App.drag = { type: 'rubber', p0: p, mi: null, moved: false, add: e.shiftKey || e.ctrlKey, client: { x: e.clientX, y: e.clientY } };
+    return;
   }
   if (m === 'bar') {
     if (h.bar !== null) { App.selMeasures = [h.bar]; render(); barMenu(h.bar, e.clientX, e.clientY); return; }
@@ -1273,7 +1446,7 @@ function onMouseDown(e) {
     if (App.widthEdit && h.bar !== null) {
       const ln = lineOf(h.bar);
       App.selBar = h.bar;
-      if (h.bar < ln.start + ln.count - 1) { History.push(S()); freezeLineWidths(ln.li); App.drag = { type: 'width', bar: h.bar, x0: p.x, wa: S().measures[h.bar].width, wb: S().measures[h.bar + 1].width }; }
+      if (h.bar < ln.start + ln.count - 1) { History.push(S()); freezeLineWidths(ln.li); App.drag = { type: 'width', bar: h.bar, p0: p, x0: p.x, wa: S().measures[h.bar].width, wb: S().measures[h.bar + 1].width }; }
       render(); return;
     }
     if (h.g) {
@@ -1377,8 +1550,10 @@ function onMouseMove(e) {
     if (d.moved) showRubber(d.p0, p);
   } else if (d.type === 'slurMove') {
     if (!d.touch) moveSlurDrag(e.clientX, e.clientY);
+  } else if (d.type === 'hp') {
+    moveHpDrag(p);
   } else if (d.type === 'slur') {
-    showSlurLine(d.from, p);
+    if (Math.hypot(p.x - d.p0.x, p.y - d.p0.y) > 4) showSlurLine(d.from, p);
   } else if (d.type === 'msel' || d.type === 'mmove') {
     const pp = pagePoint(e); const h = pp ? hit(pp) : null;
     if (d.type === 'msel' && h && h.g) { const a = Math.min(d.from, h.mi), b = Math.max(d.from, h.mi); const ns = Array.from({ length: b - a + 1 }, (_, k) => a + k); if (ns.length !== App.selMeasures.length || ns[0] !== App.selMeasures[0]) { App.selMeasures = ns; d.moved = true; render(); } }
@@ -1443,9 +1618,18 @@ function onMouseUp(e) {
       const sl = { id: uid(), a, b, type: 'slur' };
       commit(() => S().slurs.push(sl));
       App.selSlur = null; render();
+    } else if (App.mode === 'slur' && (!h || !h.note || h.note.id === d.from.id)) {
+      // 악상기호 탭: 음표를 누르고 뗀 것 = 그 음표 고르기 (Shift·Ctrl = 더하기·빼기)
+      const id = d.from.id;
+      App.sel = d.add ? (App.sel.includes(id) ? App.sel.filter(x => x !== id) : App.sel.concat(id)) : [id];
+      const order = allNotes().map(x => x.n.id);
+      App.sel.sort((x, y) => order.indexOf(x) - order.indexOf(y));
+      App.anchor = id; App.head = null; App.selSlur = null;
+      render();
     }
     return;
   }
+  if (d.type === 'hp') { if (d.moved) changed(); else render(); return; }
   if (d.type === 'msel') { if (App.mode === 'bar' && d.menuAt) measureMenu(App.selMeasures, d.menuAt.x, d.menuAt.y); return; }
   if (d.type === 'mmove') {
     if (!d.moved) { App.selMeasures = [d.from]; App.mAnchor = d.from; render(); return; }
@@ -2514,8 +2698,8 @@ async function phonePane(el) {
 const SHORTCUTS = [
   ['F1 음표', [['N', '쓰기 모드 켜기/끄기'], ['마디 오른쪽 위 ♩ 버튼 (쓰기 모드 끔)', '음표/쉼표 개수 고르기 — 고친 것은 두고 뒤쪽에서 늘리거나 줄임'], ['Caps Lock', '지금 마디(고른 음표·빈 마디 커서가 있는 마디)의 개수 창 열기 — ♩ 버튼과 같은 창'], ['H', '화음 탭으로 (멜로디를 다 쓴 다음에)'],['Shift + 클릭 (쓰기 모드)', '그 높이의 음을 화음으로 얹기 · 화음의 머리를 클릭하면 그 음만 고르기'], ['Alt + ↑ ↓', '큰보표·3단 악보에서 위/아래 줄로 옮기기'], ['개수 창이 떠 있을 때', '방향키 = 창 안에서 칸 옮기기 (음표/쉼표 · 숫자 · 쉼표로 채움) · Enter = 고르기 · Esc / Caps Lock = 닫기 — 개수가 정해지면 방향키는 다시 음표 이동'], ['빈 곳 클릭 (쓰기 모드 켬)', '그 높이에 음표 머리 추가'], ['음표 클릭', '고르기 (Shift = 범위, Ctrl = 하나씩 더하기)'], ['3 / ` / 1 / 2 / 4 (숫자열·넘패드)', '길이: 3=16분음표 `=8분음표 1=4분음표 2=2분음표 4=온음표'], ['. / 0', '점 붙이기 / 쉼표로 바꾸기'], ['쉼표 채움 버튼 두 개', '모든 부족한 박자 = 빈 마디까지 전부 · 작업한 마디만 = 음표를 넣어 빨갛게 된 마디만'], ['T', '셋잇단 켜고 끄기'], ['↑ ↓', '오선 한 칸 (Shift = 반음, Ctrl = 옥타브)'], ['A ~ G', '음 이름으로 바로'], ['← → / Enter', '이전·다음 음표 (Ctrl = 다음 마디)'], ['Alt + ← →', '고른 음표를 옆 음표와 자리 바꾸기'], ['끌기', '빈 곳에서 = 여러 개 고르기, 고른 음표 = 다른 마디로 옮기기 (쓰기 모드에선 위아래 = 음높이)'], ['Insert', '고른 음표 뒤에 새 음표'], ['꾸밈·셈여림·글자…', '악센트·스타카토·테누토·마르카토·늘임표 · 셈여림 · 템포·표현 글자 (♩=100 → 재생 빠르기도)'], ['Delete', '지우기']]],
   ['H 화음 (멜로디 잠김)', [['← → / Enter · 클릭', '화음 넣을 자리 옮기기 — 멜로디 박마다, 넣은 화음 음의 시작·끝마다 멈춰요 (Ctrl = 다음 마디)'], ['3 / ` / 1 / 2 / 4', '그 자리에서 시작하는 화음 음 넣기 (멜로디 음 3도 아래) · 이미 있으면 길이 바꾸기 · 멜로디와 리듬이 달라도 돼요 · 마디당 16개까지'], ['.', '그 자리 화음 음에 바로 점 붙이기/떼기'], ['↑ ↓ / A ~ G', '화음 음 높이 (Shift = 반음, Ctrl = 옥타브)'], ['Insert', '그 화음 음에 한 음 더 (3도 아래)'], ['Delete', '그 자리 화음 음 지우기 (멜로디는 안 지워져요)'], ['보이는 모양', '멜로디와 같은 박·같은 길이면 한 기둥 화음 · 리듬이 다르면 멜로디 기둥은 위, 화음 기둥은 아래 · 8분음표끼리는 빔으로 이어요'], ['Alt + ↑ ↓', '위/아래 줄로'], ['Esc / H', '화음 쌓기 끝 → 음표 탭 (멜로디를 다시 고칠 수 있어요)']]],
-  ['F2 이음줄', [['음표를 끌어 다른 음표에 놓기', '이음줄 만들기'], ['줄 클릭 → "붙임줄로 바꾸기" / T', '붙임줄 ↔ 이음줄 (붙임줄은 바로 옆 음끼리, 뒤 음 높이를 맞춰요)'], ['+ / S (음표 모드)', '다음 음과 붙임줄 / 이음줄']]],
-  ['F3 ~ F6', [['마디선', '마디선 클릭 = 도돌이·겹세로줄 · 마디 클릭 = 1·2번 괄호, D.S., Coda · 끌기·Shift+클릭 = 여러 마디에 괄호 · 아래 상태줄에 재생 순서'], ['코드', '마디 위 점 클릭 → 입력 · Space / Shift+Space 또는 ◀▶ = 반 박씩 · Tab = 다음 점'], ['가사', '마디 클릭 → 그 마디 가사 ([두근]처럼 묶으면 한 음에 두 글자 · _ = 건너뛰기 · 띄어쓰기 두 칸 = 빈 음 · - = 한 음) · 가사 줄(1절·2절…)은 곡 정보의 "가사 줄 수"로'], ['송폼', '마디 위쪽 클릭 → Intro, Verse, Chorus …']]],
+  ['F2 악상기호', [['음표 클릭 → 단추', '스타카토·늘임표·악센트·테누토·마르카토·박자치기·꾸밈음·셋잇단·♭♮♯·셈여림·글자'], ['< · > 단추', '크레셴도·데크레셴도 (고른 음표 처음~끝) · 양 끝 ○ 끌기 = 길이 · 가운데 끌기 = 옮기기 · Delete = 지우기'], ['음표를 끌어 다른 음표에 놓기', '이음줄 만들기'], ['줄 클릭 → "붙임줄로 바꾸기" / T', '붙임줄 ↔ 이음줄 (붙임줄은 바로 옆 음끼리, 뒤 음 높이를 맞춰요)'], ['+ / S (음표 모드)', '다음 음과 붙임줄 / 이음줄']]],
+  ['F3 ~ F6', [['F5 마디선', '마디선 클릭 = 도돌이·겹세로줄 · 마디 클릭 = 1·2번 괄호, D.S., Coda · 끌기·Shift+클릭 = 여러 마디에 괄호 · 아래 상태줄에 재생 순서'], ['F3 코드', '마디 위 점 클릭 → 입력 · Space / Shift+Space 또는 ◀▶ = 반 박씩 · Tab = 다음 점'], ['F4 가사', '마디 클릭 → 그 마디 가사 ([두근]처럼 묶으면 한 음에 두 글자 · _ = 건너뛰기 · 띄어쓰기 두 칸 = 빈 음 · - = 한 음) · 가사 줄(1절·2절…)은 곡 정보의 "가사 줄 수"로'], ['F6 송폼', '마디 위쪽 클릭 → Intro, Verse, Chorus …']]],
   ['F7 마디 편집', [['마디 클릭 / Shift+클릭 / 끌기', '마디 고르기'], ['고른 마디 끌기', '다른 자리로 옮기기 (음표·코드·가사 그대로)'], ['Ctrl+C / Ctrl+X / Ctrl+V', '복사 / 잘라내기 / 고른 마디 뒤에 붙여넣기'], ['Delete', '고른 마디 지우기 — 그 줄만 마디가 줄어요'], ['Insert / "마디 추가하기"', '고른 마디 바로 뒤에 빈 마디'], ['"앞에·뒤에 줄 넣기"', '고른 마디가 놓인 줄 앞·뒤에 새 줄'], ['"줄 지우기"', '고른 마디가 놓인 줄 전체 지우기'], ['마디 폭 "직접 수정"', '파란 마디선을 끌어 폭 바꾸기 · 고른 마디선은 ←→ (Shift = 크게) · "이 줄 똑같이" · Esc = 끝'], ['마디 폭 "자동 수정"', '박자가 다 맞는 줄만 음표 수에 맞춰 폭 나누기']]],
   ['어디서나', [['F1 ~ F7', '모드 바로 가기 (새로고침은 Ctrl+R)'], ['Tab / Shift+Tab', '다음 / 이전 모드'], ['Space', '재생 / 정지 — 초록 표시부터 · 도돌이표·괄호·D.S./D.C.·Coda·Fine을 따라가요'], ['파란 마디', '아직 작업하지 않은 빈 마디'], ['음표 누르기', '그 음을 재생 시작점으로 · ⏮ = 처음부터'], ['Ctrl+Z / Ctrl+Y', '되돌리기 / 다시'], ['Ctrl+S / Ctrl+O / Ctrl+P', '저장 / 열기 (MusicXML도) / 인쇄·PDF'], ['내보내기', 'MusicXML · MIDI · 오디오 WAV · PDF'], ['오른쪽 클릭', '마디 넣기·지우기, 박자 바꾸기, 못갖춘마디, 조 바꾸기'], ['.mid 파일을 마디에 끌어 놓기', '놓은 마디·박부터 악보로 (16분음표 단위, 맨 위 음)'], ['Ctrl + 휠', '확대 / 축소']]]];
 function shortcutsDialog() {
@@ -2528,9 +2712,9 @@ const HELP_HTML = {
   <h3>2. 음표 넣기 (F1)</h3><p>마디 오른쪽 위의 작은 <b>♩</b> 버튼을 누르거나 <b>Caps Lock</b>을 누르면 음표 개수를 고를 수 있어요 (예: 4 → 솔 자리에 음표 머리 넷). 음표를 고르고 <b>↑↓</b> 또는 <b>A~G</b>로 높이를, <b>3</b>(16분음표) · <b>\`</b>(8분음표) · <b>1</b>(4분음표) · <b>2</b>(2분음표) · <b>4</b>(온음표)로 길이를 바꿔요. 박자가 안 맞는 마디는 <span class="pill red">빨간색</span>.</p>
   <p><b>N</b>으로 쓰기 모드를 켜면 오선 빈 곳을 클릭해 바로 음표를 그릴 수 있어요. 끌면 음높이가 바뀌어요.</p>
   <h3>줄 · 화음</h3><p>줄을 클릭하면 그 줄에 쓰고, <b>Alt+↑↓</b>로 위아래 줄을 오가요. 멜로디를 다 쓴 다음 <b>H</b>(또는 위 "화음" 탭)를 누르면 화음 탭이 열려요. 이때 멜로디는 잠기고, 음표를 고르고 길이 키를 누를 때마다 그 위에 화음이 얹혀요 (길이가 달라도 돼요 · ↑↓로 높이). <b>Esc</b>로 끝내면 다시 멜로디를 고칠 수 있어요.</p>
-  <h3>3. 이음줄·붙임줄 (F2)</h3><p>음표를 끌어 다른 음표에 놓으면 이음줄. 줄을 클릭하고 T를 누르면 붙임줄로.</p>
-  <h3>4. 마디선·도돌이 (F3)</h3><p>마디선을 클릭해 도돌이표, 마디를 클릭해 1·2번 괄호와 D.S./Coda. 아래 상태줄에 실제 재생 순서가 보여요.</p>
-  <h3>5. 코드 (F4) · 가사 (F5) · 송폼 (F6)</h3><p>코드: 마디 위 점을 클릭해 입력, Space로 반 박씩 이동. 가사: 마디를 클릭해 한 마디씩 입력 (한글은 한 글자 = 한 음). 송폼: 마디 위쪽 클릭.</p>
+  <h3>3. 악상기호 (F2)</h3><p>음표를 눌러 고른 뒤 이음줄·붙임줄·스타카토·악센트·꾸밈음·셈여림·크레셴도 단추를 눌러요. 음표를 끌어 다른 음표에 놓으면 이음줄. 크레셴도는 양 끝 ○ 을 끌어 길이를 바꿔요.</p>
+  <h3>4. 마디선·도돌이 (F5)</h3><p>마디선을 클릭해 도돌이표, 마디를 클릭해 1·2번 괄호와 D.S./Coda. 아래 상태줄에 실제 재생 순서가 보여요.</p>
+  <h3>5. 코드 (F3) · 가사 (F4) · 송폼 (F6)</h3><p>코드: 마디 위 점을 클릭해 입력, Space로 반 박씩 이동. 가사: 마디를 클릭해 한 마디씩 입력 (한글은 한 글자 = 한 음). 송폼: 마디 위쪽 클릭.</p>
   <h3>6. 마디 편집 (F7)</h3><p>마디를 골라 복사·붙여넣기·지우기·옮기기, 줄 넣기, 마디 폭 조절.</p>
   <h3>7. 도구 ▾</h3><p>곡 정보 · 조옮김 · 계이름 · <b>악보 인식</b>(PDF · 사진 JPG/PNG · 한글 HWP 파일을 읽어 고칠 수 있는 악보로) · MIDI 넣기.</p>
   <h3>8. 저장 · 내 악보함</h3><p><b>Ctrl+S</b>로 .bflat 파일로 저장하거나, <b>파일 ▾ → 내 악보함에 저장</b>으로 프로그램 안에 모아 둬요 (작게 줄여서 보관). MusicXML로 내보내면 MuseScore·Sibelius에서 이어서 작업할 수 있어요. 인쇄·PDF는 Ctrl+P.</p>
@@ -2540,9 +2724,9 @@ const HELP_HTML = {
   <h3>2. Entering notes (F1)</h3><p>Tap the small <b>♩</b> button at the top right of a measure or press <b>Caps Lock</b> to choose how many notes it gets (e.g. 4 → four note heads on G). Select a note and use <b>↑↓</b> or <b>A–G</b> for pitch, and <b>3</b> (16th note) · <b>\`</b> (8th note) · <b>1</b> (quarter note) · <b>2</b> (half note) · <b>4</b> (whole note) for length. Measures with the wrong number of beats turn <span class="pill red">red</span>.</p>
   <p>Press <b>N</b> for write mode: click empty staff space to draw a note right away. Drag to change its pitch.</p>
   <h3>Staves · harmony</h3><p>Click a staff to write on it; <b>Alt+↑↓</b> moves between staves. When the melody is done press <b>H</b> (or the "Harmony" tab) — the melody is locked and every length key adds a harmony note on the selected beat (lengths may differ · ↑↓ for pitch). Press <b>Esc</b> to finish and edit the melody again.</p>
-  <h3>3. Slurs · ties (F2)</h3><p>Drag a note onto another note for a slur. Click the curve and press T to turn it into a tie.</p>
-  <h3>4. Barlines · repeats (F3)</h3><p>Click a barline for repeats, click a measure for 1st/2nd endings and D.S./Coda. The status bar shows the actual playback order.</p>
-  <h3>5. Chords (F4) · lyrics (F5) · form (F6)</h3><p>Chords: click a dot above a measure and type; Space moves half a beat. Lyrics: click a measure and type one measure at a time. Form: click above a measure.</p>
+  <h3>3. Marks (F2)</h3><p>Click notes to select them, then use the slur, tie, staccato, accent, grace note, dynamics and crescendo buttons. Drag a note onto another for a slur. Drag a crescendo's end ○ to change its length.</p>
+  <h3>4. Barlines · repeats (F5)</h3><p>Click a barline for repeats, click a measure for 1st/2nd endings and D.S./Coda. The status bar shows the actual playback order.</p>
+  <h3>5. Chords (F3) · lyrics (F4) · form (F6)</h3><p>Chords: click a dot above a measure and type; Space moves half a beat. Lyrics: click a measure and type one measure at a time. Form: click above a measure.</p>
   <h3>6. Measures (F7)</h3><p>Select measures to copy, paste, delete or move them, insert lines and adjust widths.</p>
   <h3>7. Tools ▾</h3><p>Score info · transpose · solfège · <b>score recognition</b> (reads a PDF, a photo (JPG/PNG) or a Hangul HWP file into an editable score) · insert MIDI.</p>
   <h3>8. Saving · My scores</h3><p><b>Ctrl+S</b> saves a .bflat file; <b>File ▾ → Save to My scores</b> keeps it inside the app (stored compressed). Export MusicXML to continue in MuseScore or Sibelius. Print / PDF is Ctrl+P.</p>
@@ -2552,9 +2736,9 @@ const HELP_HTML = {
   <h3>2. 音符の入力 (F1)</h3><p>小節右上の小さな <b>♩</b> ボタンを押すか <b>Caps Lock</b> を押すと音符の数を選べます (例: 4 → ソの位置に符頭4つ)。音符を選んで <b>↑↓</b> または <b>A〜G</b> で高さを、<b>3</b>(16分音符) · <b>\`</b>(8分音符) · <b>1</b>(4分音符) · <b>2</b>(2分音符) · <b>4</b>(全音符) で長さを変えます。拍が合わない小節は <span class="pill red">赤</span> になります。</p>
   <p><b>N</b> で書き込みモードをオンにすると、五線の空白をクリックしてすぐ音符を書けます。ドラッグで音の高さが変わります。</p>
   <h3>段 · 和音</h3><p>段をクリックするとその段に書き、<b>Alt+↑↓</b> で上下の段を移動します。メロディを書き終えたら <b>H</b>(または上の「和音」タブ)を押すと和音タブが開きます。メロディはロックされ、長さキーを押すたびに選んだ拍に和音が重なります (長さが違ってもOK · ↑↓で高さ)。<b>Esc</b> で終えるとまたメロディを直せます。</p>
-  <h3>3. スラー・タイ (F2)</h3><p>音符をドラッグして別の音符に置くとスラー。線をクリックしてTを押すとタイになります。</p>
-  <h3>4. 小節線・反復 (F3)</h3><p>小節線をクリックで反復記号、小節をクリックで1・2番カッコとD.S./Coda。下のステータスバーに実際の再生順が表示されます。</p>
-  <h3>5. コード (F4) · 歌詞 (F5) · 構成 (F6)</h3><p>コード: 小節上の点をクリックして入力、Spaceで半拍ずつ移動。歌詞: 小節をクリックして1小節ずつ入力。構成: 小節の上をクリック。</p>
+  <h3>3. 発想記号 (F2)</h3><p>音符をクリックして選び、スラー・タイ・スタッカート・アクセント・装飾音・強弱・クレシェンドのボタンを押します。音符をドラッグして別の音符に置くとスラー。クレシェンドは端の○をドラッグで長さを変えます。</p>
+  <h3>4. 小節線・反復 (F5)</h3><p>小節線をクリックで反復記号、小節をクリックで1・2番カッコとD.S./Coda。下のステータスバーに実際の再生順が表示されます。</p>
+  <h3>5. コード (F3) · 歌詞 (F4) · 構成 (F6)</h3><p>コード: 小節上の点をクリックして入力、Spaceで半拍ずつ移動。歌詞: 小節をクリックして1小節ずつ入力。構成: 小節の上をクリック。</p>
   <h3>6. 小節編集 (F7)</h3><p>小節を選んでコピー・貼り付け・削除・移動、段の挿入、小節幅の調整。</p>
   <h3>7. ツール ▾</h3><p>曲情報 · 移調 · 階名 · <b>楽譜認識</b>(PDF · 写真 JPG/PNG · ハングルHWPファイルを読み取り、編集できる楽譜に) · MIDIを入れる。</p>
   <h3>8. 保存 · マイ楽譜</h3><p><b>Ctrl+S</b> で.bflatファイルに保存、または <b>ファイル ▾ → マイ楽譜に保存</b> でアプリ内に保管します (圧縮して保存)。MusicXMLに書き出すとMuseScore・Sibeliusで続きを作業できます。印刷・PDFは Ctrl+P。</p>
@@ -4397,7 +4581,7 @@ function onKey(e) {
   const k = e.key, ctrl = e.ctrlKey || e.metaKey;
   if (countPopKey(e)) return;
   const fk = /^F([1-7])$/.exec(k);
-  if (fk) { e.preventDefault(); setMode(['note', 'slur', 'bar', 'chord', 'lyric', 'form', 'measure'][+fk[1] - 1]); return; }
+  if (fk) { e.preventDefault(); setMode(FKEY_MODES[+fk[1] - 1]); return; }
   if (ctrl) {
     const lk = k.toLowerCase();
     if (lk === 'z') { e.preventDefault(); return undo(); }
@@ -4415,7 +4599,7 @@ function onKey(e) {
   if (k === 'Tab') { e.preventDefault(); const i = MODES.findIndex(m => m[0] === App.mode); return setMode(MODES[mod(i + (e.shiftKey ? -1 : 1), MODES.length)][0]); }
   if (k === 'Escape') {
     if (App.mode === 'harm') { e.preventDefault(); return leaveHarm(); }
-    closePop(); closeEditors(); if (App.widthEdit) { App.widthEdit = false; App.selBar = null; } App.sel = []; App.selSlur = null; App.slurEdit = false; App.selMeasures = []; render(); return;
+    closePop(); closeEditors(); if (App.widthEdit) { App.widthEdit = false; App.selBar = null; } App.sel = []; App.selSlur = null; App.selHp = null; App.slurEdit = false; App.selMeasures = []; render(); return;
   }
   // 고른 이음줄·붙임줄 (이음줄 모드 · 음표 모드): Delete = 지우기 · ←→ = 앞·뒤 음으로 옮기기 · T = 붙임줄↔이음줄
   if (App.selSlur && (App.mode === 'slur' || App.mode === 'note')) {
@@ -4425,7 +4609,14 @@ function onKey(e) {
   }
   if (App.mode === 'note') return keyNote(e);
   if (App.mode === 'harm') return keyHarm(e);
-  if (App.mode === 'slur') return;
+  if (App.mode === 'slur') {
+    // 악상기호 탭: Delete = 고른 크레셴도 지우기 · ←→ = 다음 음표 고르기 · S/+ = 이음줄/붙임줄
+    if (App.selHp && (k === 'Delete' || k === 'Backspace')) { e.preventDefault(); return deleteHairpin(); }
+    if ((k === 'ArrowLeft' || k === 'ArrowRight') && App.sel.length) { e.preventDefault(); return navNote(k === 'ArrowLeft' ? -1 : 1, e.ctrlKey); }
+    if ((k === 's' || k === 'S' || k === 'ㄴ') && App.sel.length) { e.preventDefault(); return slurTool(); }
+    if ((k === '+' || e.code === 'NumpadAdd') && App.sel.length) { e.preventDefault(); addSlurNext('tie'); return render(); }
+    return;
+  }
   if (App.mode === 'measure') {
     if (App.widthEdit && App.selBar !== null && (k === 'ArrowLeft' || k === 'ArrowRight')) { e.preventDefault(); return nudgeBar((k === 'ArrowLeft' ? -1 : 1) * (e.shiftKey ? 12 : 2)); }
     if ((k === 'Delete' || k === 'Backspace') && App.selMeasures.length) { e.preventDefault(); commit(() => deleteMeasures(App.selMeasures)); App.selMeasures = []; render(); }
@@ -4551,6 +4742,10 @@ function onAction(act, btn, e) {
     case 'tri': return toggleTri();
     case 'chordMode': return setMode('harm');
     case 'acc': return setAccidental(+btn.dataset.acc);
+    case 'restDur': return setRestDur(btn.dataset.rdur);
+    case 'tieTool': if (!App.sel.length) return; addSlurNext('tie'); render(); return;
+    case 'hp': return addHairpin(btn.dataset.hp);
+    case 'multiRest': return multiRestDialog();
     case 'harmDone': return leaveHarm();
     case 'harmRest': return harmRest();
     case 'grace': return toggleGrace();
@@ -4562,7 +4757,7 @@ function onAction(act, btn, e) {
     case 'fillWorked': return fillRests(true);
     case 'toMeasure': return setMode('measure');
     case 'toggleTie': return toggleTieType();
-    case 'delSlur': commit(() => S().slurs = S().slurs.filter(x => x.id !== App.selSlur)); App.selSlur = null; render(); return;
+    case 'delSlur': if (App.selHp) return deleteHairpin(); commit(() => S().slurs = S().slurs.filter(x => x.id !== App.selSlur)); App.selSlur = null; render(); return;
     case 'mAdd': return addMeasureAfter(Math.max(...App.selMeasures));
     case 'mDel': commit(() => deleteMeasures(App.selMeasures)); App.selMeasures = []; render(); return;
     case 'lineBefore': return addLine(false);
@@ -4604,7 +4799,7 @@ function init() {
   $('#modes').addEventListener('click', e => { const b = e.target.closest('button'); if (b) setMode(b.dataset.mode); });
   document.addEventListener('click', e => {
     const b = e.target.closest('[data-act]'); if (b && !b.disabled) { onAction(b.dataset.act, b, e); return; }
-    const d = e.target.closest('[data-dur]'); if (d) { setDur(d.dataset.dur); return; }
+    const d = e.target.closest('[data-dur]'); if (d) { setDur(d.dataset.dur, true); return; }
     const a = e.target.closest('[data-art]'); if (a && !a.disabled) { toggleArt(a.dataset.art); return; }
     const v = e.target.closest('[data-verse]'); if (v) { closeEditors(); App.verse = +v.dataset.verse; render(); return; }
     const lu = e.target.closest('[data-lyrunit]'); if (lu) { closeEditors(); App.lyrUnit = lu.dataset.lyrunit; try { localStorage.setItem('bflat.lyrUnit', App.lyrUnit); } catch (_) { } render(); return; }
