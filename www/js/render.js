@@ -980,6 +980,8 @@ function drawMeasure(s, ctxs, lay, sys, i, k, out, o) {
       const w = sy.length * (HANGUL.test(sy) ? 13 : 7.5);
       const prefix = (kk === 0 && (s.lyricLines > 1) && (i === 0 || !(s.measures[i - 1].lyrics[v] || '').trim())) ? `${v + 1}. ` : '';
       out.push(`<text x="${f1(x)}" y="${f1(yy)}" text-anchor="middle" font-family="${font}" font-size="14" fill="${red ? '#dc2626' : '#111'}" data-syl="${i}:${v}:${kk}">${esc(sy)}</text>`);
+      // 가사 모드: 한 음에 묶은 여러 글자([크리스])는 아래에 파란 ⌣ 표시 (인쇄에는 안 나와요)
+      if (st.mode === 'lyric' && sy.length > 1 && HANGUL.test(sy)) out.push(`<path d="M${f1(x - w / 2 + 1)} ${f1(yy + 4)} Q${f1(x)} ${f1(yy + 10)} ${f1(x + w / 2 - 1)} ${f1(yy + 4)}" fill="none" stroke="#2563eb" stroke-width="1.3" stroke-linecap="round"/>`);
       if (prefix) out.push(`<text x="${f1(x - w / 2 - 3)}" y="${f1(yy)}" text-anchor="end" font-family="${font}" font-size="13" fill="#111">${prefix}</text>`);
       lay.lyr.push({ mi: i, v, k: kk, x, y: yy, w, page: sys.page });
       lastX = x; lastW = w;
