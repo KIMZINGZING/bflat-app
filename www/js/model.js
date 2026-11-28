@@ -197,7 +197,7 @@ function newScore(o) {
   o.clef = staves[0].clef;
   const s = {
     type: SCORE_TYPES[o.type] ? o.type : 'single', staves,
-    app: 'BFlat Studio', version: 1, title: o.title, composer: o.composer, lyricist: o.lyricist,
+    app: 'BFlat Studio', version: 1, title: o.title, composer: o.composer, lyricist: o.lyricist, artist: o.artist || '', hymn: o.hymn || '',
     time: { num: +o.num, den: +o.den }, key: +o.key, clef: o.clef, tempo: +o.tempo || null, tempoText: o.tempoText || '', swing: !!o.swing, lyricLines: +o.lyricLines,
     lines: [], measures: [], slurs: [], lyrRest: true, lyrSlur: true, lyrTie: true
   };
