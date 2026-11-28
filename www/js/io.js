@@ -49,8 +49,27 @@ function chordXml(name, offset) {
   if (offset) x += `<offset>${offset}</offset>`;
   return x + '</harmony>';
 }
+/* ----- 셈여림표 ↔ MusicXML ----- */
+const XML_DYN_TAGS = new Set(['p', 'pp', 'ppp', 'pppp', 'f', 'ff', 'fff', 'ffff', 'mp', 'mf', 'sf', 'sfp', 'sfpp', 'fp', 'rf', 'rfz', 'sfz', 'sffz', 'fz', 'n', 'pf', 'sfzp']);
+// 말로 쓰는 셈여림 (악보 글자 → 셈여림표로 읽어요)
+const DYN_WORDS = { 'cresc': 'cresc.', 'cresc.': 'cresc.', 'crescendo': 'cresc.', 'decresc': 'decresc.', 'decresc.': 'decresc.', 'decrescendo': 'decresc.', 'dim': 'dim.', 'dim.': 'dim.', 'diminuendo': 'dim.', 'morendo': 'morendo', 'smorzando': 'smorzando', 'smorz.': 'smorzando', 'subitop': 'subito p', 'sub.p': 'subito p', 'subitof': 'subito f', 'sub.f': 'subito f' };
+function dynTag(el) { return el.tagName === 'other-dynamics' ? (dynFromWords(el.textContent) || el.textContent.trim()) : el.tagName; }
+function dynFromWords(w) { return DYN_WORDS[(w || '').trim().toLowerCase().replace(/\s+/g, '')] || null; }
+function dynXml(d, staffTag) {
+  const inner = XML_DYN_TAGS.has(d) ? `<dynamics><${d}/></dynamics>` : /^subito\s/.test(d) ? `<dynamics><other-dynamics>${esc(d)}</other-dynamics></dynamics>` : `<words font-style="italic">${esc(d)}</words>`;
+  return `<direction placement="below"><direction-type>${inner}</direction-type>${staffTag}</direction>`;
+}
+function wedgeXml(type, offset, staffTag) {
+  return `<direction placement="below"><direction-type><wedge type="${type}"/></direction-type>${offset ? `<offset>${offset}</offset>` : ''}${staffTag}</direction>`;
+}
 function exportMusicXML(s) {
   const ctxs = computeContexts(s);
+  // 크레셴도·데크레셴도: 마디 id → 그 마디에서 시작/끝나는 것
+  const hpAt = new Map();
+  (s.hairpins || []).forEach(hp => {
+    const put = (mid, k, t) => { if (!hpAt.has(mid)) hpAt.set(mid, []); hpAt.get(mid).push({ k, t, hp }); };
+    put(hp.a.m, 'start', hp.a.t); put(hp.b.m, 'stop', hp.b.t);
+  });
   const tied = tieSets(s);
   const slurStart = new Map(), slurStop = new Map();
   let sn = 0;
@@ -123,11 +142,15 @@ function exportMusicXML(s) {
         const syls = {};
         if (si === 0) for (let v = 0; v < s.lyricLines; v++) syls[v] = parseLyrics(m.lyrics[v]);
         let sylIdx = 0;
-        if (!notes.length) { x += `<note><rest measure="yes"/><duration>${c.cap}</duration><voice>${voice}</voice>${staffTag}</note>`; t = c.cap; }
+        const wedges = (hpAt.get(m.id) || []).filter(w => (w.hp.si || 0) === si).sort((a, b) => a.t - b.t || (a.k === 'stop' ? -1 : 1));
+        let wi = 0;
+        const flushWedges = (upTo, tNow) => { while (wi < wedges.length && wedges[wi].t < upTo) { const w = wedges[wi++]; x += wedgeXml(w.k === 'stop' ? 'stop' : w.hp.type === 'dim' ? 'diminuendo' : 'crescendo', Math.max(0, w.t - tNow), staffTag); } };
+        if (!notes.length) { flushWedges(c.cap, 0); x += `<note><rest measure="yes"/><duration>${c.cap}</duration><voice>${voice}</voice>${staffTag}</note>`; t = c.cap; }
         notes.forEach(n => {
           const d = noteTicks(n, c.cap);
           while (ci < chords.length && chords[ci].t < t + d) { x += chordXml(chords[ci].name, Math.max(0, chords[ci].t - t)); ci++; }
-          if (n.dyn) x += `<direction placement="below"><direction-type><dynamics><${n.dyn}/></dynamics></direction-type>${staffTag}</direction>`;
+          flushWedges(t + d, t);
+          if (n.dyn) x += dynXml(n.dyn, staffTag);
           if (n.text) x += `<direction placement="above"><direction-type><words>${esc(n.text)}</words></direction-type>${staffTag}</direction>`;
           const common = (p) => {
             let y = `<duration>${d}</duration>`;
@@ -171,6 +194,7 @@ function exportMusicXML(s) {
           t += d;
         });
         while (ci < chords.length) { x += chordXml(chords[ci].name, 0); ci++; }
+        flushWedges(Infinity, t);   // 마디 끝에서 끝나는 크레셴도
         // 둘째 성부 (길이가 다른 화음 음) → voice+1
         const ovs = OVr(m, si).slice().sort((a, b) => (a.t || 0) - (b.t || 0));
         // 겹치는 음은 성부를 하나씩 더 나눠서 (voice+1, voice+2 …)
@@ -331,6 +355,7 @@ function importMusicXML(text) {
     n.p = pitch;
     if (si === 0 && m._pendingText) { n.text = m._pendingText; delete m._pendingText; }
     if (m._pendingDyn) { n.dyn = m._pendingDyn; delete m._pendingDyn; }
+    const nd = q(el, 'notations > dynamics > *'); if (nd) n.dyn = dynTag(nd);   // 음표에 붙은 셈여림 (sfz 등)
     const midi = n.p ? `${si}:${pitchMidi(n.p)}` : '';
     const ties = [...el.querySelectorAll('tie')].map(e => e.getAttribute('type'));
     if (tieOpen.has(midi) && ties.includes('stop')) { s.slurs.push({ id: uid(), a: tieOpen.get(midi), b: n.id, type: 'tie' }); tieOpen.delete(midi); }
@@ -377,6 +402,20 @@ function importMusicXML(text) {
     return best;
   };
 
+  // 크레셴도·데크레셴도 (<wedge>): 시작을 열어 뒀다가 stop 에서 닫아요 (마디를 넘어가도)
+  const wedgeOpen = new Map();
+  const readWedges = (el, m, si, t) => el.querySelectorAll('wedge').forEach(wg => {
+    const ty = wg.getAttribute('type'), k = si + ':' + (wg.getAttribute('number') || '1');
+    if (ty === 'crescendo' || ty === 'diminuendo') wedgeOpen.set(k, { type: ty === 'diminuendo' ? 'dim' : 'cresc', si, a: { m: m.id, t: Math.max(0, t) } });
+    else if (ty === 'stop' && wedgeOpen.has(k)) {
+      const o = wedgeOpen.get(k); wedgeOpen.delete(k);
+      let bt = Math.max(0, t);
+      if (o.a.m === m.id && bt <= o.a.t) bt = o.a.t + TPQ;   // 길이 0 이면 한 박만큼
+      (s.hairpins = s.hairpins || []).push({ id: uid(), type: o.type, si: o.si, a: o.a, b: { m: m.id, t: bt } });
+    }
+  });
+  const dirStaff = (el, pi) => base[pi] + Math.max(0, (+txt(el, 'staff', '1') || 1) - 1);
+  const dirOffset = (el, dv) => Math.round(+txt(el, 'offset', 0) * TPQ / dv);
   // 1) 첫 파트: 마디 정보 + 음표
   let div = 1, lineCount = 0;
   [...parts[0].querySelectorAll(':scope > measure')].forEach((me, idx) => {
@@ -407,8 +446,10 @@ function importMusicXML(text) {
         const mk = { 'd.s.': 'ds', 'd.s.alcoda': 'dsalcoda', 'd.s.alfine': 'dsalfine', 'd.c.': 'dc', 'd.c.alcoda': 'dcalcoda', 'd.c.alfine': 'dcalfine', 'fine': 'fine', 'tocoda': 'tocoda' }[wl];
         if (mk) m.marks.push(mk);
         else if (w && idx === 0 && !s.tempoText && TEMPO_TERMS.some(tt => tt[0].toLowerCase() === w.trim().toLowerCase())) s.tempoText = w.trim();
+        else if (w && dynFromWords(w)) m._pendingDyn = dynFromWords(w);   // cresc. · dim. · subito p … = 셈여림
         else if (w) m._pendingText = w;
-        const dyn = q(el, 'dynamics > *'); if (dyn) m._pendingDyn = dyn.tagName;
+        const dyn = q(el, 'dynamics > *'); if (dyn) m._pendingDyn = dynTag(dyn);
+        readWedges(el, m, dirStaff(el, 0), t + dirOffset(el, div));
       } else if (tag === 'harmony') {
         const rs = txt(el, 'root-step', 'C'), ra = +txt(el, 'root-alter', 0);
         const kindEl = q(el, 'kind');
@@ -473,7 +514,11 @@ function importMusicXML(text) {
       let pt2 = 0;
       [...me.children].forEach(el => {
         if (el.tagName === 'attributes') pdiv = +txt(el, 'divisions', pdiv);
-        else if (el.tagName === 'direction') { const dyn = q(el, 'dynamics > *'); if (dyn) m._pendingDyn = dyn.tagName; }
+        else if (el.tagName === 'direction') {
+          const dyn = q(el, 'dynamics > *'); if (dyn) m._pendingDyn = dynTag(dyn);
+          else { const dw = dynFromWords(txt(el, 'words', '')); if (dw) m._pendingDyn = dw; }
+          readWedges(el, m, dirStaff(el, pi), pt2 + dirOffset(el, pdiv));
+        }
         else if (el.tagName === 'backup') pt2 -= Math.round(+txt(el, 'duration', 0) * TPQ / pdiv);
         else if (el.tagName === 'forward') pt2 += Math.round(+txt(el, 'duration', 0) * TPQ / pdiv);
         else if (el.tagName === 'note') pt2 += handleNote(el, m, base[pi] + Math.max(0, (+txt(el, 'staff', '1') || 1) - 1), pdiv, st, pt2);
@@ -918,16 +963,17 @@ function omrForImport(text, opts) {
     if (mm[4]) { const b = doc.createElement('bass'), bs = doc.createElement('bass-step'); bs.textContent = mm[4]; b.appendChild(bs); if (alt(mm[5])) { const ba = doc.createElement('bass-alter'); ba.textContent = alt(mm[5]); b.appendChild(ba); } h.appendChild(b); }
     dir.replaceWith(h);
   });
+  // 셈여림(p·f·sfz …) · 크레셴도/데크레셴도(<wedge>) · cresc./dim. 같은 셈여림 말은 그대로 읽어요
+  //  (그 밖의 글자는 인식 잡음이 많아서 빼요 · D.S./Fine 같은 길 표시와 빠르기말은 남겨요)
   [...doc.querySelectorAll('direction')].forEach(dir => {
     kids(dir, 'direction-type').forEach(dt => {
-      kids(dt, 'dynamics').forEach(e => e.remove());
-      kids(dt, 'words').forEach(w => { if (!NAV.test(w.textContent) && !TEMPO_TERMS.some(tt => tt[0].toLowerCase() === w.textContent.trim().toLowerCase())) w.remove(); });
+      kids(dt, 'dynamics').forEach(e => { if (!e.children.length) e.remove(); });
+      kids(dt, 'words').forEach(w => { if (!NAV.test(w.textContent) && !dynFromWords(w.textContent) && !TEMPO_TERMS.some(tt => tt[0].toLowerCase() === w.textContent.trim().toLowerCase())) w.remove(); });
       if (!dt.children.length) dt.remove();
     });
     kids(dir, 'sound').forEach(snd => snd.removeAttribute('dynamics'));
     if (!kids(dir, 'direction-type').length) dir.remove();
   });
-  doc.querySelectorAll('notations > dynamics').forEach(e => e.remove());
   doc.querySelectorAll('notations').forEach(e => { if (!e.children.length) e.remove(); });
   if (!opts.lyrics) doc.querySelectorAll('note > lyric').forEach(e => e.remove());
   const parts = kids(doc.documentElement, 'part');
