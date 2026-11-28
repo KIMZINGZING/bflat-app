@@ -65,6 +65,10 @@ select.btn { padding: 5px 8px; }
 #subbar { display: flex; align-items: center; gap: 6px; padding: 7px 10px; background: var(--sub); border-bottom: 1px solid var(--line); min-height: 48px; flex-wrap: wrap; }
 .hint { font-size: 12.5px; color: var(--muted); max-width: 360px; line-height: 1.35; }
 .hint.one { max-width: none; }
+.hint.narrow { max-width: 310px; }
+/* 음표 탭: 버튼 두 줄 (위 = 음표 입력 · 아래 = 셈여림·글자·쉼표 채우기·편집) */
+.sub-rows { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 5px; }
+.sub-row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 .sep { width: 1px; height: 24px; background: var(--line); margin: 0 3px; }
 .seg { display: flex; gap: 2px; }
 .seg .btn { border-radius: 6px; }
@@ -132,6 +136,8 @@ body.writing #pages .page { cursor: crosshair; }
 .ed-nav { border: 1px solid var(--line); background: var(--sub); border-radius: 5px; cursor: pointer; padding: 3px 5px; font-size: 11px; }
 .lyric-ed { min-width: 180px; }
 .lyric-ed .ed-row input { flex: 1; min-width: 0; }
+.lyric-ed .lyr-merge { position: absolute; z-index: 2; white-space: nowrap; font-size: 12px; font-weight: 600; padding: 2px 8px; border: 1px solid var(--blue); border-radius: 999px; background: var(--blue); color: #fff; cursor: pointer; box-shadow: 0 2px 6px rgba(30,64,175,.25); }
+.lyric-ed .lyr-merge[hidden] { display: none; }
 .ed-ok { border: 1px solid var(--blue); background: var(--blue); color: #fff; border-radius: 5px; cursor: pointer; padding: 4px 9px; font-size: 12.5px; font-weight: 700; white-space: nowrap; }
 .ed-keys { display: flex; gap: 3px; margin-top: 4px; }
 .ed-key { flex: 1; min-width: 22px; border: 1px solid var(--line); background: var(--sub); color: var(--ink); border-radius: 4px; cursor: pointer; padding: 2px 4px; font-size: 11.5px; font-weight: 700; line-height: 1.3; }
@@ -458,8 +464,9 @@ body.slurbar-on #scroller { padding-bottom: 190px; }
   #topbar .zoom { display: none; }
   #subbar .hint { display: none; }
   #subbar { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
-  #subbar > * { flex-shrink: 0; }
-  #subbar .sep, #subbar > .grow { display: none; }
+  #subbar > *, #subbar .sub-row > * { flex-shrink: 0; }
+  #subbar .sub-rows, #subbar .sub-row { display: contents; }
+  #subbar .sep, #subbar > .grow, #subbar .sub-row > .grow { display: none; }
   .modal { width: auto !important; max-width: 96vw; max-height: 90vh; overflow-y: auto; }
   .type-grid { grid-template-columns: 1fr; }
   .type-card.wide { grid-column: auto; display: flex; flex-direction: column; }
@@ -496,8 +503,9 @@ body.touch.land #modes button { padding: 5px 8px; font-size: 13px; flex: 0 0 aut
 body.touch.land #modes button small { display: none; }
 /* 아래 줄: 설명은 빼고 그 모드에서 쓰는 버튼만 한 줄 (넘치면 옆으로 밀어서) */
 body.touch.land #subbar { min-height: 0; padding: 3px 6px; gap: 4px; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
-body.touch.land #subbar > * { flex-shrink: 0; }
-body.touch.land #subbar .hint, body.touch.land #subbar .sep, body.touch.land #subbar > .grow,
+body.touch.land #subbar > *, body.touch.land #subbar .sub-row > * { flex-shrink: 0; }
+body.touch.land #subbar .sub-rows, body.touch.land #subbar .sub-row { display: contents; }
+body.touch.land #subbar .hint, body.touch.land #subbar .sep, body.touch.land #subbar > .grow, body.touch.land #subbar .sub-row > .grow,
 body.touch.land #subbar [data-act="fillAll"], body.touch.land #subbar [data-act="fillWorked"], body.touch.land #subbar [data-act="toMeasure"],
 body.touch.land #subbar .chk-beats, body.touch.land #subbar .chk-empty { display: none; }
 body.touch.land #subbar .btn, body.touch.land #subbar select.btn { min-height: 32px; padding: 2px 8px; font-size: 13px; }
