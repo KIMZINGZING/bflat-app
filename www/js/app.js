@@ -129,6 +129,8 @@ function updateStatus() {
   const dotB = $('#bDot'); if (dotB) dotB.classList.toggle('on', has && ns.every(x => x.n.dots));
   const triB = $('#bTri'); if (triB) triB.classList.toggle('on', has && ns.every(x => x.n.tri));
   const grB = $('#bGrace'); if (grB) grB.classList.toggle('on', has && ns.every(x => x.n.gr && x.n.gr.length));
+  const pn = ns.filter(x => !x.n.rest && x.n.p);
+  $$('[data-acc]').forEach(b => b.classList.toggle('on', pn.length > 0 && pn.every(x => x.n.p.a === +b.dataset.acc && (+b.dataset.acc !== 0 || keyAlter(App.ctxs[x.mi].key, mod(x.n.p.d, 7)) !== 0))));
   const dynS = $('#selDyn'); if (dynS) { dynS.disabled = !has; dynS.value = has && ns[0] && ns[0].n.dyn ? ns[0].n.dyn : ''; }
   const wb = $('#bWrite'); if (wb) { wb.classList.toggle('on', App.write); wb.innerHTML = `✎ 쓰기 모드 ${App.write ? '켬' : '끔'}`; }
   const tb = $('#bTieToggle'); if (tb) { const sl = S().slurs.find(x => x.id === App.selSlur); tb.disabled = !sl; tb.textContent = sl && sl.type === 'tie' ? '이음줄로 바꾸기' : '붙임줄로 바꾸기'; }
@@ -171,21 +173,24 @@ function buildSubbar() {
   const m = App.mode;
   let h = '';
   if (m === 'note') {
-    h = `<div class="hint">마디 오른쪽 위 ♩ 버튼 / Caps Lock = 음표 개수 고르기 · 길이 = 3:16분음표 \`:8분음표 1:4분음표 2:2분음표 4:온음표 · ↑↓ = 음높이 · H = 화음 · Alt+↑↓ = 줄 바꾸기 · ←→/Enter = 다음 음표 · 빈 곳 끌기 = 여러 개 고르기 · 고른 음표 끌기 = 다른 마디로 · N = 쓰기 모드</div>
+    h = `<div class="hint narrow">마디 오른쪽 위 ♩ 버튼 / Caps Lock = 음표 개수 고르기 · 길이 = 3:16분음표 \`:8분음표 1:4분음표 2:2분음표 4:온음표 · ↑↓ = 음높이 · H = 화음 · Alt+↑↓ = 줄 바꾸기 · ←→/Enter = 다음 음표 · 빈 곳 끌기 = 여러 개 고르기 · 고른 음표 끌기 = 다른 마디로 · N = 쓰기 모드</div>
+    <div class="sub-rows"><div class="sub-row">
     <button class="btn" id="bWrite" data-act="toggleWrite">✎ 쓰기 모드 끔</button>
     <div class="seg">${['w', 'h', 'q', 'e', 's'].map(d => `<button class="btn mus" data-dur="${d}" title="${DUR_KO[d]} (${Object.keys(NUMKEY_DUR).find(k => NUMKEY_DUR[k] === d)})">${DUR_GLYPH[d]}</button>`).join('')}</div>
     <button class="btn" id="bDot" data-act="dot" title="점 붙이기 (.)">점 붙이기 •</button>
     <button class="btn need-sel" id="bTri" data-act="tri" title="셋잇단 (T)">셋잇단</button>
-    <button class="btn" id="bChord" data-act="chordMode" title="화음 탭으로 (H) — 멜로디는 잠그고 화음만 쌓아요">화음 쌓기 → H</button>
     <span class="sep"></span>
     <div class="seg">${ARTS.map(([k, g, t]) => `<button class="btn need-sel art" data-art="${k}" title="${t}">${g}</button>`).join('')}<button class="btn art" id="bSlur" data-act="slurTool" title="이음줄 (S) — 고른 음표에 달기 · 악보의 이음줄을 누르면 여기서 고치기">${SLUR_ICON}</button><button class="btn need-sel art" id="bGrace" data-act="grace" title="꾸밈음 (앞꾸밈음) — 고른 음표 앞에 작은 음 · ↑↓ = 꾸밈음 높이">꾸밈음</button></div>
+    <div class="seg">${[[-1, '♭', '플랫 (반음 내림)'], [0, '♮', '제자리표'], [1, '♯', '샵 (반음 올림)']].map(([a, g, t]) => `<button class="btn need-sel art acc" data-act="acc" data-acc="${a}" title="${t} — 고른 음표에 · 다시 누르면 조표대로">${g}</button>`).join('')}</div>
+    </div><div class="sub-row">
     <select id="selDyn" class="btn need-sel" title="셈여림"><option value="">셈여림</option>${DYNS.map(d => `<option value="${d}">${d}</option>`).join('')}<option value="-">지우기</option></select>
     <button class="btn need-sel" data-act="text" title="템포·표현 글자 (rit., Swing, ♩=100 …)">글자…</button>
     <span class="sep"></span>
     <button class="btn primary" data-act="fillAll">모든 부족한 박자를 쉼표로 채움</button>
     <button class="btn outline" data-act="fillWorked">작업한 마디만 쉼표로 채움</button>
     <span class="sep"></span>
-    <button class="btn" data-act="toMeasure">줄·마디 편집 →</button>`;
+    <button class="btn" data-act="toMeasure">줄·마디 편집 →</button>
+    ${statusButtons()}</div></div>`;
   } else if (m === 'harm') {
     h = `<div class="hint"><b class="lock">🔒 멜로디 잠김</b> · ←→/클릭 = 화음 넣을 자리 · 길이 키(3 \` 1 2 4) = 그 자리에 화음 음 (리듬 따로 · 마디당 16개까지) · . = 점 · 0 = 쉼표 · ↑↓/A~G = 높이 · Insert = 한 음 더 · Delete = 지우기 · Esc/H = 끝</div>
     <div class="seg">${['w', 'h', 'q', 'e', 's'].map(d => `<button class="btn mus" data-dur="${d}" title="${DUR_KO[d]} 화음 음 얹기 (${Object.keys(NUMKEY_DUR).find(k => NUMKEY_DUR[k] === d)})">${DUR_GLYPH[d]}</button>`).join('')}</div>
@@ -202,7 +207,7 @@ function buildSubbar() {
     h = `<div class="hint one">마디 위 점(또는 점 사이 빈 곳 = 가장 가까운 반 박)을 클릭해 코드 입력 · Enter = 저장 · Space = 반 박씩 옮기기 · Tab = 다음 점 · 빈칸으로 저장 = 지우기</div>`;
   } else if (m === 'lyric') {
     const n = S().lyricLines || 1;
-    h = `<div class="hint">절 칸(1절·2절…)을 눌러 그 절 가사 쓰기 · 빈 칸은 비워 두면 안 나와요 (후렴처럼 1절만 쓰는 줄) · 음표 머리·쉼표 하나 = 한 음절 · 붙임줄·이음줄로 이어진 음 = - · [두근] = 한 음에 두 글자 · _ = 한 음 건너뛰기 · 띄어쓰기 두 칸 = 빈 음 · 줄씩 쓸 때 | = 다음 마디</div>
+    h = `<div class="hint">절 칸(1절·2절…)을 눌러 그 절 가사 쓰기 · 빈 칸은 비워 두면 안 나와요 (후렴처럼 1절만 쓰는 줄) · 음표 머리·쉼표 하나 = 한 음절 · 붙임줄·이음줄로 이어진 음 = - · [두근] 또는 글자를 드래그해 ✓ 한 음절로 = 한 음에 여러 글자 · _ = 한 음 건너뛰기 · 띄어쓰기 두 칸 = 빈 음 · 줄씩 쓸 때 | = 다음 마디</div>
     <div class="seg">${Array.from({ length: n }, (_, k) => `<button class="btn" data-verse="${k}">${k + 1}절</button>`).join('')}</div>
     <button class="btn" data-act="verseAdd" title="절 하나 더 (모든 줄에 빈 칸이 생겨요)"${n >= MAX_VERSES ? ' disabled' : ''}>＋ 절 추가</button>
     <button class="btn" data-act="verseDel" title="지금 고른 절을 지워요 (Ctrl+Z 로 되돌리기)"${n <= 1 ? ' disabled' : ''}>− 이 절 지우기</button>
@@ -226,7 +231,7 @@ function buildSubbar() {
     <button class="btn" data-act="widthSame">이 줄 똑같이</button>
     <button class="btn" data-act="widthAuto">자동 수정</button>`;
   }
-  sb.innerHTML = h + statusButtons();
+  sb.innerHTML = m === 'note' ? h : h + statusButtons();   // 음표 탭은 둘째 버튼 줄 끝에 이미 넣었어요
   updateStatus();
 }
 
@@ -456,6 +461,21 @@ function moveStep(dir, kind) {
       p.d = Math.max(7, Math.min(63, p.d));
       setHeadPitch(n, k, p);
     });
+  });
+  if (ok) previewSel();
+}
+/** ♭ ♮ ♯ 단추: 고른 음표의 같은 자리(줄·칸)에 임시표 (화음이면 모든 머리 · 한 머리만 골랐으면 그 머리)
+ *  이미 그 임시표면 다시 누를 때 조표대로 돌아가요 */
+function setAccidental(a) {
+  const hd = App.head;
+  const ns = selNotes().filter(x => !x.n.rest && x.n.p);
+  if (!ns.length) { toast(LG('임시표는 음표에만 붙여요 · 음표를 먼저 고르세요', 'Accidentals go on notes · select a note first', '臨時記号は音符に付けます · 先に音符を選んでください')); return; }
+  const heads = n => (hd && hd.id === n.id) ? [hd.k] : [-1].concat((n.ps || []).map((_, k) => k));
+  const all = ns.every(x => heads(x.n).every(k => { const p = headPitch(x.n, k); return !p || p.a === a; }));
+  const ok = editNotes((n, x) => {
+    if (n.rest || !n.p) return;
+    const key = App.ctxs[x.mi].key;
+    heads(n).forEach(k => { const p = headPitch(n, k); if (p) setHeadPitch(n, k, { d: p.d, a: all ? keyAlter(key, mod(p.d, 7)) : a }); });
   });
   if (ok) previewSel();
 }
@@ -1865,6 +1885,7 @@ function openLyricLineEditor(mi) {
   };
   box._place();
   const inp = box.querySelector('input'), cnt = box.querySelector('.cnt');
+  lyrMergeUI(box, inp);
   box.querySelector('.ed-ok').addEventListener('mousedown', e => { e.preventDefault(); save(); box._save = null; box.remove(); render(); });
   const upd = () => {
     const parts = splitLineLyrics(inp.value, slots);
@@ -1919,6 +1940,7 @@ function openLyricEditor(mi) {
   };
   box._place();
   const inp = box.querySelector('input'), cnt = box.querySelector('.cnt');
+  lyrMergeUI(box, inp);
   box.querySelector('.ed-ok').addEventListener('mousedown', e => { e.preventDefault(); save(); box._save = null; box.remove(); render(); });
   const upd = () => { const k = parseLyrics(inp.value).length; cnt.textContent = `· 음절 ${k}개`; cnt.style.color = k > notes ? '#dc2626' : ''; };
   upd(); inp.addEventListener('input', upd);
@@ -1938,6 +1960,60 @@ function openLyricEditor(mi) {
     if (e.key === 'Enter' || (e.key === 'Tab' && !e.shiftKey)) { e.preventDefault(); save(); box._save = null; box.remove(); render(); if (mi + 1 < S().measures.length) { openLyricEditor(mi + 1); scrollToMeasure(mi + 1); } }
     else if (e.key === 'Tab' && e.shiftKey) { e.preventDefault(); save(); box._save = null; box.remove(); render(); if (mi > 0) openLyricEditor(mi - 1); }
     else if (e.key === 'Escape') { saved = true; box.remove(); render(); }
+  });
+}
+/** 가사 칸에서 글자를 드래그해 고르면 "✓ 한 음절로" 단추가 떠요 → [크리스] (대괄호 = 한 음에 여러 글자)
+ *  고른 곳이 이미 묶인 [ ] 안이면 "나누기" 단추 (대괄호를 풀어요) */
+function lyrMergeUI(box, inp) {
+  const btn = document.createElement('button');
+  btn.type = 'button'; btn.className = 'lyr-merge'; btn.tabIndex = -1; btn.hidden = true;
+  box.appendChild(btn);
+  let act = null;
+  const groups = v => { const out = []; let o = v.indexOf('['); while (o >= 0) { let c = v.indexOf(']', o); if (c < 0) c = v.length; out.push({ o, c }); o = v.indexOf('[', c); } return out; };
+  const real = t => t && t !== '_' && t !== '-';
+  const measure = (() => { const cv = document.createElement('canvas').getContext('2d'); return t => { cv.font = getComputedStyle(inp).font; return cv.measureText(t).width; }; })();
+  const check = () => {
+    if (!box.isConnected) { document.removeEventListener('selectionchange', onSel); return; }
+    act = null;
+    const v = inp.value; let a = inp.selectionStart, b = inp.selectionEnd;
+    if (document.activeElement === inp && a !== null && b > a) {
+      const gs = groups(v);
+      const inside = gs.find(g => a >= g.o && b <= g.c + 1 && (a > g.o || b > g.o + 1));
+      const inner = inside && v.slice(inside.o + 1, inside.c);
+      if (inside && parseLyrics(inner).filter(real).length >= 2) {
+        act = { kind: 'split', a: inside.o, b: Math.min(v.length, inside.c + 1), text: inner };
+      } else if (!v.slice(a, b).includes('|')) {
+        gs.forEach(g => { if (g.o < b && g.c + 1 > a) { a = Math.min(a, g.o); b = Math.max(b, Math.min(v.length, g.c + 1)); } });   // 걸친 [ ] 은 통째로
+        const txt = v.slice(a, b).replace(/[\s\[\]_-]/g, '');
+        if (txt.length >= 2 && parseLyrics(v.slice(a, b)).filter(real).length >= 2) act = { kind: 'merge', a, b, text: `[${txt}]` };
+      }
+    }
+    btn.hidden = !act;
+    if (!act) return;
+    btn.textContent = act.kind === 'merge' ? LG('✓ 한 음절로', '✓ One syllable', '✓ 1音節に') : LG('↔ 나누기', '↔ Split', '↔ 分ける');
+    btn.title = act.kind === 'merge'
+      ? LG('고른 글자들을 음표 하나에 붙여요 (예: [크리스])', 'Put the selected letters on one note (e.g. [Christ])', '選んだ文字を1つの音符に (例: [クリス])')
+      : LG('묶은 글자를 다시 한 글자씩 나눠요', 'Split the grouped letters back to one per note', 'まとめた文字を1文字ずつに戻す');
+    const cs = getComputedStyle(inp);
+    const x0 = inp.offsetLeft + parseFloat(cs.paddingLeft) + parseFloat(cs.borderLeftWidth) - inp.scrollLeft;
+    const mid = x0 + (measure(v.slice(0, inp.selectionStart)) + measure(v.slice(0, inp.selectionEnd))) / 2;
+    btn.style.left = Math.max(0, Math.min(box.clientWidth - btn.offsetWidth, mid - btn.offsetWidth / 2)) + 'px';
+    btn.style.top = (inp.offsetTop - btn.offsetHeight - 3) + 'px';
+  };
+  const onSel = () => { if (document.activeElement === inp || btn.hidden === false) check(); };
+  ['select', 'mouseup', 'keyup', 'input', 'blur', 'scroll'].forEach(ev => inp.addEventListener(ev, () => setTimeout(check, 0)));
+  document.addEventListener('selectionchange', onSel);
+  btn.addEventListener('pointerdown', e => e.preventDefault());
+  btn.addEventListener('mousedown', e => e.preventDefault());
+  btn.addEventListener('click', e => {
+    e.preventDefault();
+    if (!act) return;
+    const v = inp.value, { a, b, text } = act;
+    inp.value = v.slice(0, a) + text + v.slice(b);
+    inp.focus({ preventScroll: true });
+    inp.setSelectionRange(a + text.length, a + text.length);
+    inp.dispatchEvent(new Event('input'));   // 음절 수 다시 세기
+    btn.hidden = true; act = null;
   });
 }
 
@@ -4474,6 +4550,7 @@ function onAction(act, btn, e) {
     case 'dot': return toggleDot();
     case 'tri': return toggleTri();
     case 'chordMode': return setMode('harm');
+    case 'acc': return setAccidental(+btn.dataset.acc);
     case 'harmDone': return leaveHarm();
     case 'harmRest': return harmRest();
     case 'grace': return toggleGrace();
