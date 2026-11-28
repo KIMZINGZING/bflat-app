@@ -109,6 +109,9 @@ function computeLayout(s, ctxs, opt) {
     let need = pre.map((p, k) => Math.max(isMr[k] ? 96 : 0, prefix[k] + PAD + p.lead + p.segs.reduce((a, sg) => a + sg.min, 0)));
     const needFull = need.slice();
     const nat = pre.map((p, k) => Math.max(isMr[k] ? 130 : 0, prefix[k] + PAD + p.lead + p.segs.reduce((a, sg) => a + Math.max(sg.min, sg.f * 46), 0)));
+    // 여러 마디 쉼표는 이 줄의 보통 마디 폭만큼 (악보마다 자동 폭)
+    const plain = nat.filter((w, k) => !isMr[k]);
+    if (plain.length && isMr.some(Boolean)) { const avgW = plain.reduce((a, b) => a + b, 0) / plain.length; isMr.forEach((mr, k) => { if (mr) nat[k] = Math.max(nat[k], avgW); }); }
     let ws = idxs.map(i => s.measures[i].width || 0);
     const fixed = ws.filter(w => w > 0), autoN = ws.length - fixed.length;
     let overflow = false;
@@ -145,7 +148,8 @@ function computeLayout(s, ctxs, opt) {
       }
     }
     const hasForm = idxs.some(i => s.measures[i].form);
-    const hasRow2 = idxs.some(i => { const m = s.measures[i]; return m.volta || (m.marks && m.marks.length) || m.notes.some(n => n.dyn || n.text); });
+    const hpSt = hpStaves(s, idxs);   // 이 줄에 걸친 크레셴도·데크레셴도 (오선 번호 → true)
+    const hasRow2 = !!hpSt[0] || idxs.some(i => { const m = s.measures[i]; return m.volta || (m.marks && m.marks.length) || m.notes.some(n => n.dyn || n.text); });
     const ext = clefs.map((clef, si) => {
       let lo = 0, hi = 8;
       idxs.forEach(i => SNr(s.measures[i], si).forEach(n => notePitches(n).forEach(p => { const q = posOf(p, clef); lo = Math.min(lo, q); hi = Math.max(hi, q); })));
@@ -158,7 +162,7 @@ function computeLayout(s, ctxs, opt) {
         idxs.forEach(i => { tp = Math.max(tp, staffTopPos(s.measures[i], si, clef, ctxs[i])); });
         above = Math.max(above, (tp - 8) * L.SP / 2 - 6);
         // 이 줄 음표에 붙은 셈여림·글자(오선 위에 써요)
-        if (idxs.some(i => SNr(s.measures[i], si).some(n => n.dyn || n.text))) above = Math.max(above, 24);
+        if (hpSt[si] || idxs.some(i => SNr(s.measures[i], si).some(n => n.dyn || n.text))) above = Math.max(above, 24);
       }
       // 아래 덧줄 음: 머리 아래 끝까지 (가사·계이름이 머리에 닿지 않게)
       // 아래로 내린 기둥·빔 끝도 (높은 음이 많으면 기둥이 아래로 가요 — 조옮김으로 음이 올라갔을 때)
@@ -468,9 +472,14 @@ function displayLines(s, runs) {
   for (let i = 0; i < s.measures.length;) { const e = runs.has(i) ? runs.get(i) : i; units.push([i, e]); i = e + 1; }
   const out = [];
   let u = 0;
+  // 여러 마디 쉼표를 만들며 늘어난 줄(예: 4마디 줄 → 8마디)은 숨은 마디만큼 칸 수를 줄여요 (보통 줄 길이까지)
+  const sorted = s.lines.slice().sort((a, b) => a - b), med = sorted[Math.floor(sorted.length / 2)] || 4;
+  const hidden = new Set(); runs.forEach((e, i) => { for (let j = i + 1; j <= e; j++) hidden.add(j); });
   orig.forEach(o => {
     if (u >= units.length) return;
-    const take = units.slice(u, u + o.idxs.length); u += take.length;
+    const hid = o.idxs.filter(i => hidden.has(i)).length;
+    const cap = Math.max(1, o.idxs.length - Math.min(hid, Math.max(0, o.idxs.length - med)));
+    const take = units.slice(u, u + cap); u += take.length;
     const idxs = take.map(x => x[0]);
     const same = idxs.length === o.idxs.length && take.every((x, k) => x[0] === x[1] && x[0] === o.idxs[k]);
     out.push({ li: o.li, idxs, packed: !same });
@@ -513,6 +522,73 @@ function solfaName(p, style) {
   const base = style === 'abc' ? STEPS[step] : (SOLFA_BY_LANG[lang] || SOLFA_KO)[step];
   const acc = p.a > 0 ? '#'.repeat(p.a) : p.a < 0 ? '♭'.repeat(-p.a) : '';
   return base + acc;
+}
+/* ---------- 셈여림표 ---------- */
+const DYN_LETTERS = /^[pmfszrn]+$/;
+/** 셈여림 글자 너비 (뒤에 붙는 글자 자리) */
+function dynW(d) { return DYN_LETTERS.test(d) ? d.length * 9 : d.length * 6.6; }
+/** ppp~fff·sfz 같은 기호 = 굵은 기울임 · subito p = "subito" + 굵은 p · cresc. 같은 말 = 기울임 */
+function svgDyn(d, x, y, col) {
+  const serif = `font-family="'Times New Roman',serif" font-style="italic"`;
+  if (DYN_LETTERS.test(d)) return `<text x="${f1(x)}" y="${f1(y)}" ${serif} font-weight="700" font-size="16" fill="${col}">${esc(d)}</text>`;
+  const m = /^(subito)\s+([pmf]+)$/.exec(d);
+  if (m) return `<text x="${f1(x)}" y="${f1(y)}" ${serif} font-size="14" fill="${col}">${m[1]} <tspan font-weight="700" font-size="16">${m[2]}</tspan></text>`;
+  return `<text x="${f1(x)}" y="${f1(y)}" ${serif} font-size="14" fill="${col}">${esc(d)}</text>`;
+}
+/** 줄(마디 목록)에 걸친 크레셴도·데크레셴도가 있는 오선 → { 오선 번호: true } */
+function hpStaves(s, idxs) {
+  const out = {};
+  if (!s.hairpins || !s.hairpins.length || !idxs.length) return out;
+  const idx = new Map(); s.measures.forEach((m, i) => idx.set(m.id, i));
+  const lo = idxs[0], hi = idxs[idxs.length - 1];
+  s.hairpins.forEach(hp => {
+    const ia = idx.get(hp.a.m), ib = idx.get(hp.b.m);
+    if (ia === undefined || ib === undefined) return;
+    if (ia <= hi && ib >= lo) out[hp.si || 0] = true;
+  });
+  return out;
+}
+/** 크레셴도(<)·데크레셴도(>) 그리기 · 줄이 바뀌면 나눠서 · 고른 것은 양 끝 ○ (끌어서 길이) */
+function drawHairpins(s, lay, st, pages) {
+  lay.hps = []; lay.hpEnds = {};
+  const hps = s.hairpins || [];
+  if (!hps.length) return;
+  const idx = new Map(); s.measures.forEach((m, i) => idx.set(m.id, i));
+  const H = 11;
+  hps.forEach(hp => {
+    const ia = idx.get(hp.a.m), ib = idx.get(hp.b.m);
+    if (ia === undefined || ib === undefined) return;
+    const ga = lay.meas[ia], gb = lay.meas[ib]; if (!ga || !gb) return;
+    const s0 = lay.systems.indexOf(ga.sys), s1 = lay.systems.indexOf(gb.sys);
+    if (s0 < 0 || s1 < s0) return;
+    const xa = tickX(ga, hp.a.t), xb = tickX(gb, hp.b.t);
+    const segs = [];
+    for (let k = s0; k <= s1; k++) {
+      const sy = lay.systems[k];
+      const x1 = k === s0 ? xa : sy.x0 + sy.headerW + 4, x2 = k === s1 ? xb : sy.x1 - 4;
+      if (x2 > x1 + 1) segs.push({ sy, x1, x2 });
+    }
+    if (!segs.length) return;
+    const total = segs.reduce((a, g) => a + g.x2 - g.x1, 0);
+    const sel = st.selHp === hp.id;
+    const open = c => hp.type === 'dim' ? H * (1 - c / total) : H * c / total;
+    let cum = 0;
+    const ends = lay.hpEnds[hp.id] = {};
+    segs.forEach((g, k) => {
+      const si = Math.min(hp.si || 0, g.sy.staffTops.length - 1);
+      const y = g.sy.staffTops[si] - 31 - (si === 0 ? (g.sy.chordDy || 0) : 0);
+      const o1 = open(cum) / 2, o2 = open(cum + g.x2 - g.x1) / 2;
+      cum += g.x2 - g.x1;
+      const d = `M${f1(g.x1)} ${f1(y - o1)} L${f1(g.x2)} ${f1(y - o2)} M${f1(g.x1)} ${f1(y + o1)} L${f1(g.x2)} ${f1(y + o2)}`;
+      const P = pages[g.sy.page].parts;
+      if (sel) P.push(`<path d="${d}" fill="none" stroke="rgba(37,99,235,.28)" stroke-width="6" stroke-linecap="round"/>`);
+      P.push(`<path d="${d}" fill="none" stroke="#111" stroke-width="1.2" stroke-linecap="round"/>`);
+      lay.hps.push({ id: hp.id, page: g.sy.page, x1: g.x1, x2: g.x2, y, h: H });
+      if (k === 0) ends.a = { page: g.sy.page, x: g.x1, y };
+      if (k === segs.length - 1) ends.b = { page: g.sy.page, x: g.x2, y };
+    });
+    if (sel && st.mode === 'slur') ['a', 'b'].forEach(k => { const e = ends[k]; if (e) pages[e.page].parts.push(`<circle cx="${f1(e.x)}" cy="${f1(e.y)}" r="${st.slurHandleR || 4}" fill="#fff" stroke="#2563eb" stroke-width="1.6"/>`); });
+  });
 }
 function m0HasChords(s, idxs) { return idxs.some(i => s.measures[i].chords && s.measures[i].chords.length); }
 function tickX(g, t) {
@@ -659,6 +735,9 @@ function renderScore(s, ctxs, lay, st) {
   }
 
   const numOffset = s.measures[0] && s.measures[0].pickup ? 0 : 1;
+  // 마디 편집 탭은 여러 마디 쉼표를 펼쳐 보여요 → 묶음을 점선 칸 + "N마디 쉼표"로 알려 줘요
+  const mrOf = new Map();
+  if (st.mode === 'measure') restRuns(s, ctxs).forEach((e, i) => { for (let j = i; j <= e; j++) mrOf.set(j, { a: i, e }); });
 
   lay.systems.forEach(sys => {
     const out = pages[sys.page].parts;
@@ -681,6 +760,19 @@ function renderScore(s, ctxs, lay, st) {
       if (st.hoverMeasure === i && (st.mode === 'lyric' || st.mode === 'bar' || st.mode === 'measure' || (st.mode === 'note' && !st.write)))
         out.push(`<rect x="${f1(g.x + 1)}" y="${f1(top - 10)}" width="${f1(g.w - 2)}" height="${f1(botAll - top + 20)}" rx="3" fill="rgba(37,99,235,.06)"/>`);
     });
+    if (mrOf.size) {
+      const done = new Set();
+      sys.idxs.forEach(i => {
+        const r = mrOf.get(i); if (!r || done.has(r.a)) return;
+        done.add(r.a);
+        const inSys = sys.idxs.filter(j => j >= r.a && j <= r.e);
+        const ga = lay.meas[inSys[0]], gb = lay.meas[inSys[inSys.length - 1]];
+        const x1 = ga.x + 2, x2 = gb.x + gb.w - 2, n = r.e - r.a + 1;
+        out.push(`<rect x="${f1(x1)}" y="${f1(top - 18)}" width="${f1(x2 - x1)}" height="${f1(botAll - top + 26)}" rx="4" fill="none" stroke="#7c3aed" stroke-width="1.2" stroke-dasharray="4 3"/>`);
+        const lbl = typeof LG === 'function' ? LG(`${n}마디 쉼표 (다른 탭에서 한 마디로 보여요)`, `${n}-measure rest (shown as one in other tabs)`, `${n}小節休符 (他のタブで1小節に表示)`) : `${n}마디 쉼표`;
+        if (inSys[0] === r.a) out.push(`<text x="${f1(x1 + 4)}" y="${f1(top - 22)}" font-family="sans-serif" font-size="11" font-weight="700" fill="#7c3aed">${lbl}</text>`);
+      });
+    }
     // 가사 모드: 줄마다 절 칸 (1절·2절…) · 지금 쓰는 절은 파란 띠 · 빈 마디는 점선 칸 (눌러서 그 절·그 마디/줄 가사 쓰기)
     if (st.mode === 'lyric') sys.verses.forEach((v, row) => {
       const yy = lyrRowY(sys, row), cur = v === st.verse;
@@ -842,6 +934,8 @@ function renderScore(s, ctxs, lay, st) {
     // 고른 이음줄: 양 끝 손잡이 (끌면 그 끝만 옮겨요 · 붙임줄은 통째로만)
     if (sel && !isTie) ['a', 'b'].forEach(k => { const e = ends[k]; if (e) pages[e.page].parts.push(`<circle cx="${f1(e.x)}" cy="${f1(e.y)}" r="${st.slurHandleR || 4}" fill="#fff" stroke="#2563eb" stroke-width="1.6"/>`); });
   });
+  // 크레셴도 · 데크레셴도
+  drawHairpins(s, lay, st, pages);
   return pages;
 }
 
@@ -931,12 +1025,11 @@ function drawMeasure(s, ctxs, lay, sys, i, k, out, o) {
   g.notesGeo = [];
   g.geoSt = [];
   if (g.mr) {
-    // 여러 마디 쉼표: 가운데 굵은 가로줄 + 양 끝 세로 + 위에 마디 수
-    const x1 = g.cx + 6, x2 = g.cx + g.cw - 6;
+    // 여러 마디 쉼표: 마디 가운데 온쉼표 (넷째 줄에 매달린 네모) + 위에 쉬는 마디 수
+    const cx = g.cx + g.cw / 2;
     tops.forEach(t => {
-      out.push(`<g class="mrest"><rect x="${f1(x1)}" y="${f1(t + 2 * SP - 4)}" width="${f1(x2 - x1)}" height="8" fill="#111"/>` +
-        `<line x1="${f1(x1)}" y1="${f1(t + SP)}" x2="${f1(x1)}" y2="${f1(t + 3 * SP)}" stroke="#111" stroke-width="1.6"/><line x1="${f1(x2)}" y1="${f1(t + SP)}" x2="${f1(x2)}" y2="${f1(t + 3 * SP)}" stroke="#111" stroke-width="1.6"/>` +
-        `<text x="${f1((x1 + x2) / 2)}" y="${f1(t - 7)}" text-anchor="middle" font-family="'Times New Roman',serif" font-size="19" font-weight="700" fill="#111">${g.mr}</text></g>`);
+      out.push(`<g class="mrest"><rect x="${f1(cx - 6.5)}" y="${f1(t + SP)}" width="13" height="${f1(SP / 2 + 0.5)}" fill="#111"/>` +
+        `<text x="${f1(cx)}" y="${f1(t - 7)}" text-anchor="middle" font-family="'Times New Roman',serif" font-size="19" font-weight="700" fill="#111">${g.mr}</text></g>`);
       g.geoSt.push([]);
     });
     return;
@@ -1205,8 +1298,8 @@ function drawStaffNotes(s, c, g, sys, i, si, out, o, lay) {
       });
     }
     const rowDy = si === 0 ? (sys.chordDy || 0) : 0;
-    if (n.dyn) o2 += `<text x="${f1(gg.x - 6)}" y="${f1(top - 26 - rowDy)}" font-family="'Times New Roman',serif" font-style="italic" font-weight="700" font-size="16" fill="${col}">${esc(n.dyn)}</text>`;
-    if (n.text) o2 += `<text x="${f1(gg.x - 6 + (n.dyn ? 24 : 0))}" y="${f1(top - 26 - rowDy)}" font-family="${font}" font-style="italic" font-size="14" fill="${col}">${esc(n.text)}</text>`;
+    if (n.dyn) o2 += svgDyn(n.dyn, gg.x - 6, top - 26 - rowDy, col);
+    if (n.text) o2 += `<text x="${f1(gg.x - 6 + (n.dyn ? dynW(n.dyn) + 6 : 0))}" y="${f1(top - 26 - rowDy)}" font-family="${font}" font-style="italic" font-size="14" fill="${col}">${esc(n.text)}</text>`;
     o2 += '</g>';
     out.push(o2);
   });
