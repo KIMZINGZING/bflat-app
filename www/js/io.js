@@ -80,7 +80,7 @@ function exportMusicXML(s) {
   staffGroups(s).forEach(gp => { if (s.staves[gp.a] && s.staves[gp.a].grp === 'ens') { for (let si = gp.a; si <= gp.b; si++) groups.push({ a: si, b: si, ens: true }); } else groups.push(gp); });
   const pitchXml = p => `<pitch><step>${STEPS[mod(p.d, 7)]}</step>${p.a ? `<alter>${p.a}</alter>` : ''}<octave>${Math.floor(p.d / 7)}</octave></pitch>`;
   let x = `<?xml version="1.0" encoding="UTF-8" standalone="no"?>\n<!DOCTYPE score-partwise PUBLIC "-//Recordare//DTD MusicXML 3.1 Partwise//EN" "http://www.musicxml.org/dtds/partwise.dtd">\n<score-partwise version="3.1">\n`;
-  x += `<work><work-title>${esc(s.title || '')}</work-title></work>\n<identification>${s.composer ? `<creator type="composer">${esc(s.composer)}</creator>` : ''}${s.lyricist ? `<creator type="lyricist">${esc(s.lyricist)}</creator>` : ''}<encoding><software>BFlat Studio</software></encoding></identification>\n`;
+  x += `<work>${s.hymn ? `<work-number>${esc(s.hymn)}</work-number>` : ''}<work-title>${esc(s.title || '')}</work-title></work>\n<identification>${s.composer ? `<creator type="composer">${esc(s.composer)}</creator>` : ''}${s.lyricist ? `<creator type="lyricist">${esc(s.lyricist)}</creator>` : ''}${s.artist ? `<creator type="artist">${esc(s.artist)}</creator>` : ''}<encoding><software>BFlat Studio</software></encoding></identification>\n`;
   const ensIdx = groups.map((g, k) => g.ens ? k : -1).filter(k => k >= 0);
   x += '<part-list>' + groups.map((gp, gi) => {
     const st = s.staves[gp.a]; const nm = st.name || (gp.b > gp.a ? 'Piano' : 'Melody');
@@ -261,6 +261,8 @@ function importMusicXML(text) {
   s.title = txt(doc, 'work-title', '') || txt(doc, 'movement-title', '');
   s.composer = txt(doc, 'creator[type="composer"]', '');
   s.lyricist = txt(doc, 'creator[type="lyricist"]', '');
+  s.artist = txt(doc, 'creator[type="artist"]', '');
+  s.hymn = txt(doc, 'work-number', '');
   // 줄(오선) 목록: 파트마다 staves 수만큼
   const partNames = {};
   doc.querySelectorAll('score-part').forEach(sp => partNames[sp.getAttribute('id')] = txt(sp, 'part-name', ''));
