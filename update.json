@@ -1,6 +1,6 @@
 {
- "version": "f0a73588b1cb",
- "built": "2026-11-28 23:25",
+ "version": "7bb48952a003",
+ "built": "2026-11-29 00:11",
  "files": {
   "assets/apple-touch-icon.png": {
    "sha256": "e9aca0c2fe30a5f6300661decbd1d578c00c7c0cead84b40374e696224d6712f",
@@ -39,8 +39,8 @@
    "size": 5717
   },
   "js/app.js": {
-   "sha256": "7006282312381670d7ff4140643c8801a138f1e15fdbbae694462ff7446652c8",
-   "size": 389147
+   "sha256": "37d515540c8466c4b92ef5dedb4ca9708fb586a90829726498aa8e9aadf8a5c7",
+   "size": 403793
   },
   "js/audio.js": {
    "sha256": "f6696d6b21a962872a4ec841f1f12027f7d78a4ad8183a0126eaf40823d25013",
@@ -67,16 +67,16 @@
    "size": 88969
   },
   "js/io.js": {
-   "sha256": "f7d206ac3fdebc38ffdb66de3c31d6df371b5aa1fc6f00c8093a334f0e5d8020",
-   "size": 108218
+   "sha256": "c7e26b0378dca5abfefecb519683ff61373ca71cc5c11f85f0cae09cf1238c0b",
+   "size": 108443
   },
   "js/model.js": {
-   "sha256": "ea0e835788548bab0e1bdbf20832e851cd5969902344b8048283dbe2ebe4789e",
-   "size": 30058
+   "sha256": "56e3e4eb9a7eaec2220c85c448253c21d1987eb578977bd7ce89b61e444c9fde",
+   "size": 30102
   },
   "js/render.js": {
-   "sha256": "c1a633ed3149963af7055f569a123fff202479018176d301bb1688e24a917f47",
-   "size": 88331
+   "sha256": "75e7e7da07a3fcbc78785cc314635877735c0630d4fcec8b0b86983104925b4e",
+   "size": 90194
   },
   "js/vendor/pdf.min.js": {
    "sha256": "5b5799e6f8c680663207ac5b42ee14eed2a406fa7af48f50c154f0c0b1566946",
