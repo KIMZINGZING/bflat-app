@@ -71,7 +71,8 @@ function computeLayout(s, ctxs, opt) {
   lay.shorts = shorts;
   let headH = 34;
   if (s.title) headH += 52;
-  if (s.composer || s.lyricist) headH += 14;
+  const credN = creditLines(s).length;
+  if (credN) headH += 14 + (credN - 1) * 16;
   lay.headH = headH;
   let y = L.TOPM + headH, page = { index: 0, systems: [], h: 0 };
   lay.pages.push(page);
@@ -100,7 +101,7 @@ function computeLayout(s, ctxs, opt) {
     const avail = L.PW - x0 - L.MR - headerW;
     const verses = [];
     // 가사 모드에서는 모든 절의 칸을 줄마다 펼쳐요 (빈 절도 눌러서 쓸 수 있게) · 다른 모드·인쇄는 쓴 절만
-    for (let v = 0; v < (s.lyricLines || 1); v++) if ((opt && opt.lyrAll) || idxs.some(i => (s.measures[i].lyrics[v] || '').trim())) verses.push(v);
+    for (let v = 0; v < (s.lyricLines || 1); v++) if (idxs.some(i => (s.measures[i].lyrics[v] || '').trim()) || (opt && opt.lyrAll && verseInLine(s, v, idxs))) verses.push(v);
     // 마디마다 음표 간격(구간) 먼저 계산 → 음표가 많은 마디는 넓게 (마디 폭을 똑같이 나누면 빽빽한 마디에서 음표가 겹쳐요)
     const pre = idxs.map((i, k) => measureSegs(s, ctxs[i], s.measures[i], nSt, tied, verses));
     const PAD = L.MPAD_L + L.MPAD_R;
@@ -523,6 +524,26 @@ function solfaName(p, style) {
   const acc = p.a > 0 ? '#'.repeat(p.a) : p.a < 0 ? '♭'.repeat(-p.a) : '';
   return base + acc;
 }
+/* ---------- 가사 줄: 절 · 후렴 ----------
+ * s.verseMeta[v] = { refrain: true (후렴 줄 · 번호 없이) , only: [마디 id…] (그 줄에만 만든 절 · 가사 모드에서 그 줄에만 칸) } */
+function verseMetaOf(s, v) { return (s.verseMeta && s.verseMeta[v]) || {}; }
+/** 인쇄 번호: 후렴을 뺀 절 순서 (1. 2. 3.) · 후렴이면 0 */
+function verseNo(s, v) { if (verseMetaOf(s, v).refrain) return 0; let k = 0; for (let q = 0; q <= v; q++) if (!verseMetaOf(s, q).refrain) k++; return k; }
+/** 화면 이름: 1절 · 2절 · 후렴 (후렴이 여럿이면 후렴2 …) */
+function verseLabel(s, v) {
+  const lg = typeof LG === 'function' ? LG : (a) => a;
+  if (verseMetaOf(s, v).refrain) { let k = 0; for (let q = 0; q <= v; q++) if (verseMetaOf(s, q).refrain) k++; return lg('후렴', 'Refrain', 'リフレイン') + (k > 1 ? k : ''); }
+  const n = verseNo(s, v); return lg(`${n}절`, `V${n}`, `${n}番`);
+}
+/** 가사 모드에서 이 줄(마디 목록)에 그 절 칸을 보일지: 한 줄에만 만든 절은 그 줄에만 */
+function verseInLine(s, v, idxs) {
+  const only = verseMetaOf(s, v).only;
+  if (!only || !only.length) return true;
+  const set = new Set(only);
+  return idxs.some(i => s.measures[i] && set.has(s.measures[i].id));
+}
+/** 악보 오른쪽 위에 적는 글: 작곡가 → 작사가 → 아티스트 → 찬송가 */
+function creditLines(s) { return [s.composer, s.lyricist, s.artist, s.hymn].map(x => (x || '').trim()).filter(Boolean); }
 /* ---------- 셈여림표 ---------- */
 const DYN_LETTERS = /^[pmfszrn]+$/;
 /** 셈여림 글자 너비 (뒤에 붙는 글자 자리) */
@@ -715,11 +736,10 @@ function renderScore(s, ctxs, lay, st) {
   // 머리말
   let hy = L.TOPM;
   if (s.title) { P.push(`<text x="${L.PW / 2}" y="${hy + 30}" text-anchor="middle" font-family="${font}" font-size="26" font-weight="700" fill="#111">${esc(s.title)}</text>`); hy += 52; }
-  if (s.composer || s.lyricist) {
-    if (s.composer) P.push(`<text x="${L.PW - L.MR}" y="${hy + 6}" text-anchor="end" font-family="${font}" font-size="13" fill="#333">${esc(s.composer)}</text>`);
-    if (s.lyricist) P.push(`<text x="${L.ML}" y="${hy + 6}" font-family="${font}" font-size="13" fill="#333">${esc(s.lyricist)}</text>`);
-    hy += 14;
-  }
+  // 작곡가 · 작사가 · 아티스트 · 찬송가: 모두 오른쪽 위에 위에서부터 차례로
+  const cred = creditLines(s);
+  cred.forEach((t, k) => P.push(`<text x="${L.PW - L.MR}" y="${hy + 6 + k * 16}" text-anchor="end" font-family="${font}" font-size="13" fill="#333">${esc(t)}</text>`));
+  if (cred.length) hy += 14 + (cred.length - 1) * 16;
   // 빠르기 표시: "Moderato ♩ = 112" / "Moderato" / "♩ = 90" / (둘 다 비면 없음)
   if (s.tempoText) {
     P.push(`<text class="tempo-mark" x="${L.ML}" y="${hy + 10}" font-family="${font}" fill="#111"><tspan font-size="16" font-weight="700">${esc(s.tempoText)}</tspan>` +
@@ -778,7 +798,7 @@ function renderScore(s, ctxs, lay, st) {
       const yy = lyrRowY(sys, row), cur = v === st.verse;
       const xa = lay.meas[sys.idxs[0]].x, xb = sys.x1;
       if (cur) out.push(`<rect x="${f1(xa)}" y="${f1(yy - 15)}" width="${f1(xb - xa)}" height="20" rx="3" fill="rgba(37,99,235,.10)"/>`);
-      const lbl = typeof LG === 'function' ? LG(`${v + 1}절`, `V${v + 1}`, `${v + 1}番`) : `${v + 1}절`;
+      const lbl = verseLabel(s, v);
       out.push(`<text x="${f1(xa - 4)}" y="${f1(yy)}" text-anchor="end" font-family="sans-serif" font-size="11" font-weight="${cur ? 700 : 400}" fill="${cur ? '#2563eb' : '#7c8db5'}">${lbl}</text>`);
       sys.idxs.forEach(i => {
         if ((s.measures[i].lyrics[v] || '').trim()) return;
@@ -889,22 +909,16 @@ function renderScore(s, ctxs, lay, st) {
     // 어느 쪽에 그릴지:
     //  붙임줄 = 기둥 반대쪽(머리 쪽) · 화음 성부(아래 성부)끼리 = 아래 · 두 성부일 때 멜로디 = 위
     //  한 성부: 둘 다 기둥이 위면 아래, 그 밖에는 위
-    let under;
-    if (isTie) under = !!a.stemUp;
-    else if (a.ov && b.ov && !a.merged && !b.merged) under = true;
-    else if (a.forceUp === true || b.forceUp === true) under = false;
-    else under = !!(a.stemUp && b.stemUp);
+    // 이음줄·붙임줄은 언제나 음표 머리 쪽 (기둥 반대쪽) · 머리에서 시작해서 머리에서 끝나요 (기둥 끝에 붙지 않게)
+    //  기둥 위 = 머리 아래로 · 기둥 아래 = 머리 위로 · 둘이 다르면 첫 음 기준 · 기둥 없는 음(온음표·쉼표)은 다른 음을 따라요
+    const sideOf = gg => (gg.rest || gg.stemEnd === undefined || gg.stemUp === undefined) ? null : (gg.stemUp ? 'under' : 'over');
+    const side = sideOf(a) || sideOf(b);
+    const under = isTie ? !!a.stemUp : side === 'under';
     const endY = (gg, isB) => {
       if (isTie) return gg.y + (under ? 7 : -7);
-      const hasStem = gg.stemEnd !== undefined && !gg.rest;
-      if (!under) return (hasStem && gg.stemUp ? Math.min(gg.yHigh, gg.stemEnd) : gg.yHigh) - 6;
-      return (hasStem && gg.stemUp === false ? Math.max(gg.yLow, gg.stemEnd) : gg.yLow) + 6;
+      return under ? gg.yLow + 6 : gg.yHigh - 6;
     };
-    // 기둥 쪽에 붙으면 기둥 끝 근처(x)로
-    const endX = (gg, isB) => {
-      if (!isTie && gg.stemEnd !== undefined && !gg.rest && ((!under && gg.stemUp) || (under && gg.stemUp === false))) return gg.x + (gg.stemUp ? 5 : -5) + (isB ? -1 : 1);
-      return gg.x + (isB ? -3 : 3);
-    };
+    const endX = (gg, isB) => gg.x + (isB ? -3 : 3);
     const ya = endY(a, false), yb = endY(b, true), xa = endX(a, false), xb = endX(b, true);
     if (a.sysObj === b.sysObj) segs.push({ page: a.page, x1: xa, y1: ya, x2: xb, y2: yb });
     else {
@@ -1071,7 +1085,8 @@ function drawMeasure(s, ctxs, lay, sys, i, k, out, o) {
       }
       if (!sy) { lastX = x; lastW = 0; return; }   // 띄어쓰기로 비운 음
       const w = sy.length * (HANGUL.test(sy) ? 13 : 7.5);
-      const prefix = (kk === 0 && (s.lyricLines > 1) && (i === 0 || !(s.measures[i - 1].lyrics[v] || '').trim())) ? `${v + 1}. ` : '';
+      const vno = verseNo(s, v);   // 후렴 줄은 번호를 안 붙여요
+      const prefix = (vno && kk === 0 && (s.lyricLines > 1) && (i === 0 || !(s.measures[i - 1].lyrics[v] || '').trim())) ? `${vno}. ` : '';
       out.push(`<text x="${f1(x)}" y="${f1(yy)}" text-anchor="middle" font-family="${font}" font-size="14" fill="${red ? '#dc2626' : '#111'}" data-syl="${i}:${v}:${kk}">${esc(sy)}</text>`);
       // 가사 모드: 한 음에 묶은 여러 글자([크리스])는 아래에 파란 ⌣ 표시 (인쇄에는 안 나와요)
       if (st.mode === 'lyric' && sy.length > 1 && HANGUL.test(sy)) out.push(`<path d="M${f1(x - w / 2 + 1)} ${f1(yy + 4)} Q${f1(x)} ${f1(yy + 10)} ${f1(x + w / 2 - 1)} ${f1(yy + 4)}" fill="none" stroke="#2563eb" stroke-width="1.3" stroke-linecap="round"/>`);
@@ -1375,9 +1390,13 @@ function drawStaffNotes(s, c, g, sys, i, si, out, o, lay) {
     if (!tri.length) return;
     const xa = tri[0].x, xb = tri[tri.length - 1].x;
     const upT = tri[0].stemUp !== false;
-    const yy = upT ? Math.min(...tri.map(gg => Math.min(gg.yHigh, gg.stemEnd !== undefined ? gg.stemEnd : gg.yHigh))) - 6
-      : Math.max(...tri.map(gg => Math.max(gg.yLow, gg.stemEnd || gg.yLow))) + 14;
-    out.push(`<text x="${f1((xa + xb) / 2 + (upT ? 3 : -3))}" y="${f1(yy)}" text-anchor="middle" font-family="'Times New Roman',serif" font-style="italic" font-weight="700" font-size="12" fill="#111">3</text>`);
+    const yy = upT ? Math.min(...tri.map(gg => Math.min(gg.yHigh, gg.stemEnd !== undefined ? gg.stemEnd : gg.yHigh))) - 8
+      : Math.max(...tri.map(gg => Math.max(gg.yLow, gg.stemEnd || gg.yLow))) + 16;
+    const cx = (xa + xb) / 2 + (upT ? 3 : -3);
+    // 셋잇단 괄호: ⌐― 3 ―¬ (양 끝은 음표 쪽으로 꺾어요)
+    const x1 = xa - 5 + (upT ? 2 : 0), x2 = xb + 5 + (upT ? 1 : 0), by = yy - 4, hook = upT ? 5 : -5;
+    out.push(`<path d="M${f1(x1)} ${f1(by + hook)} V${f1(by)} H${f1(cx - 7)} M${f1(cx + 7)} ${f1(by)} H${f1(x2)} V${f1(by + hook)}" fill="none" stroke="#111" stroke-width="1"/>`);
+    out.push(`<text x="${f1(cx)}" y="${f1(yy)}" text-anchor="middle" font-family="'Times New Roman',serif" font-style="italic" font-weight="700" font-size="12" fill="#111">3</text>`);
     tri = [];
   };
   let triAcc = 0, triSpan = 0;
