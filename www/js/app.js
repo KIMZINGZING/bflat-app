@@ -162,7 +162,7 @@ function setMode(m) {
   const from = App.mode;
   App.mode = m;
   App.selSlur = null; App.selHp = null; App.chordEdit = null;
-  App.head = null; App.lastTone = null;
+  App.head = null; App.lastTone = null; App.lyrPick = false; App.lyrPickFrom = null;
   if (m === 'harm') {
     App.write = false;
     // 화음 탭: 고른 음표의 박에서 화음 넣을 자리(커서) 시작
@@ -216,13 +216,16 @@ function buildSubbar() {
   } else if (m === 'bar') {
     h = `<div class="hint one">마디선 클릭 = 도돌이표·겹세로줄·끝세로줄 · 마디 클릭 = 1·2번 괄호, D.S., Coda, Fine · 끌기·Shift+클릭 = 여러 마디에 괄호를 한꺼번에</div>`;
   } else if (m === 'chord') {
-    h = `<div class="hint one">마디 위 점(또는 점 사이 빈 곳 = 가장 가까운 반 박)을 클릭해 코드 입력 · Enter = 저장 · Space = 반 박씩 옮기기 · Tab = 다음 점 · 빈칸으로 저장 = 지우기</div>`;
+    h = `<div class="hint one">${LG('마디 위 점(또는 점 사이 빈 곳 = 가장 가까운 반 박)을 클릭해 코드 입력 · Enter = 저장 · → ← = 한 박씩 (<< >>) · ↑ ↓ = 반 박씩 (◀ ▶) · Tab = 다음 점 · 빈칸으로 저장 = 지우기', 'Click a dot above a measure to type a chord · Enter = save · → ← = one beat (<< >>) · ↑ ↓ = half a beat (◀ ▶) · Tab = next dot · save empty = remove', '小節上の点をクリックしてコード入力 · Enter = 保存 · → ← = 1拍ずつ (<< >>) · ↑ ↓ = 半拍ずつ (◀ ▶) · Tab = 次の点 · 空で保存 = 削除').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</div>`;
   } else if (m === 'lyric') {
     const n = S().lyricLines || 1;
     h = `<div class="hint">절 칸(1절·2절…)을 눌러 그 절 가사 쓰기 · 빈 칸은 비워 두면 안 나와요 (후렴처럼 1절만 쓰는 줄) · 음표 머리·쉼표 하나 = 한 음절 · 붙임줄·이음줄로 이어진 음 = - · [두근] 또는 글자를 드래그해 ✓ 한 음절로 = 한 음에 여러 글자 · _ = 한 음 건너뛰기 · 띄어쓰기 두 칸 = 빈 음 · 줄씩 쓸 때 | = 다음 마디</div>
-    <div class="seg">${Array.from({ length: n }, (_, k) => `<button class="btn" data-verse="${k}">${k + 1}절</button>`).join('')}</div>
-    <button class="btn" data-act="verseAdd" title="절 하나 더 (모든 줄에 빈 칸이 생겨요)"${n >= MAX_VERSES ? ' disabled' : ''}>＋ 절 추가</button>
+    <div class="seg">${Array.from({ length: n }, (_, k) => `<button class="btn" data-verse="${k}">${esc(verseLabel(S(), k))}</button>`).join('')}</div>
+    <button class="btn" data-act="verseAdd" title="${esc(LG('절 하나 더 (모든 줄에 빈 칸 · "고른 줄에만"을 켜면 그 줄에만)', 'One more verse (all lines · only the chosen line when "Chosen line only" is on)', '番を追加 (全段 ·「選んだ段だけ」なら その段だけ)'))}"${n >= MAX_VERSES ? ' disabled' : ''}>＋ ${LG('절 추가', 'Verse', '番を追加')}</button>
     <button class="btn" data-act="verseDel" title="지금 고른 절을 지워요 (Ctrl+Z 로 되돌리기)"${n <= 1 ? ' disabled' : ''}>− 이 절 지우기</button>
+    <button class="btn" data-act="refrainAdd" title="${esc(LG('후렴 가사 줄 하나 더 (번호 없이 "후렴" · 인쇄할 때 1. 2. 번호가 안 붙어요)', 'Add a refrain lyric line (no verse number)', 'リフレインの歌詞行を追加 (番号なし)'))}"${n >= MAX_VERSES ? ' disabled' : ''}>＋ ${LG('후렴구 추가', 'Refrain', 'リフレイン追加')}</button>
+    <label class="mini" title="${esc(LG('켜면 절·후렴 추가가 마지막으로 누른 마디의 줄(오선 한 줄)에만 칸을 만들어요', 'When on, a new verse/refrain row appears only on the line you last clicked', 'オンにすると最後に押した段だけに欄を作ります'))}"><input type="checkbox" id="lyrLineOnly"${App.lyrLineOnly ? ' checked' : ''}> ${LG('고른 줄에만', 'Chosen line only', '選んだ段だけ')}</label>
+    <button class="btn${App.lyrPick ? ' on' : ''}" data-act="refrainUnify" title="${esc(LG('후렴 마디를 드래그(또는 처음·끝 마디를 차례로 탭)해서 고르고 → 통일할 절을 체크 → 지금 절의 가사를 그 절들에 똑같이 복사', 'Drag over the refrain measures (or tap first and last), tick verses → copies this verse\'s lyrics to them', 'リフレインの小節をドラッグして選び → 統一する番をチェック → 今の番の歌詞をコピー'))}">${LG('후렴 가사 통일…', 'Unify refrain…', 'リフレイン統一…')}</button>
     <span class="sep"></span>
     <span class="mini">입력 칸</span>
     <div class="seg"><button class="btn" data-lyrunit="measure" title="마디 하나씩 입력 · Enter = 다음 마디">마디씩</button><button class="btn" data-lyrunit="line" title="한 줄(여러 마디)을 한 번에 입력 · 음표 수대로 마디에 나눠 넣어요 · | 로 마디를 직접 나눌 수도 있어요 · Enter = 다음 줄">줄씩</button></div>`;
@@ -1381,6 +1384,7 @@ function scrollToMeasure(mi) {
 function onMouseDown(e) {
   e.__bflat = true;
   if (e.button !== 0) return;
+  if (App.tapMenuAt && Date.now() - App.tapMenuAt < 700) return;   // 두 번 탭으로 연 마디 메뉴를 바로 닫지 않게
   const p = pagePoint(e);
   closePop();
   // 가사 칸이 열려 있으면 빈 곳을 눌러도 안 닫혀요 (Enter·[입력]으로 닫기 · 다른 마디를 누르면 저장하고 그 마디로)
@@ -1436,6 +1440,13 @@ function onMouseDown(e) {
   if (m === 'chord') { if (h.g) { const c = App.ctxs[h.mi]; const half = (isCompound(c) ? 72 : c.beat) / 2; let t = Math.round(h.t / half) * half; if (t >= c.cap) t = c.cap - half; openChordEditor(h.mi, Math.max(0, t)); } return; }
   if (m === 'lyric') {
     if (!h.g) return;
+    // 후렴 가사 통일: 마디 고르기 (끌기 · 또는 처음/끝 마디 차례로 누르기)
+    if (App.lyrPick) {
+      if (App.lyrPickFrom === null || App.lyrPickFrom === undefined) App.selMeasures = [h.mi];
+      else { const a = Math.min(App.lyrPickFrom, h.mi), b = Math.max(App.lyrPickFrom, h.mi); App.selMeasures = Array.from({ length: b - a + 1 }, (_, k) => a + k); }
+      App.drag = { type: 'msel', from: h.mi, lyrPick: true };
+      render(); return;
+    }
     // 오선 아래 절 칸을 누르면 그 절로 바꿔요 (오선 위를 누르면 지금 고른 절 그대로)
     const row = lyrRowAt(h.sys, p.y);
     if (row >= 0 && App.verse !== h.sys.verses[row]) { App.verse = h.sys.verses[row]; render(); }
@@ -1630,6 +1641,13 @@ function onMouseUp(e) {
     return;
   }
   if (d.type === 'hp') { if (d.moved) changed(); else render(); return; }
+  if (d.type === 'msel' && d.lyrPick) {
+    // 끌어서 골랐으면 바로 · 한 번 누른 것이면 처음 마디로 기억해 두고 끝 마디를 기다려요 (두 번째로 누르면 그 사이 전부)
+    if (d.moved || (App.lyrPickFrom !== null && App.lyrPickFrom !== undefined)) return refrainUnifyDialog(App.selMeasures.slice());
+    App.lyrPickFrom = d.from;
+    toast(LG('끝 마디를 누르세요 (같은 마디를 한 번 더 누르면 그 마디만)', 'Now tap the last measure (same one again = just that measure)', '最後の小節を押してください'), 2600);
+    return;
+  }
   if (d.type === 'msel') { if (App.mode === 'bar' && d.menuAt) measureMenu(App.selMeasures, d.menuAt.x, d.menuAt.y); return; }
   if (d.type === 'mmove') {
     if (!d.moved) { App.selMeasures = [d.from]; App.mAnchor = d.from; render(); return; }
@@ -1640,6 +1658,7 @@ function onMouseUp(e) {
   if (d.type === 'width') { if (d.moved) changed(); }
 }
 function onDblClick(e) {
+  if (App.tapMenuAt && Date.now() - App.tapMenuAt < 700) return;   // 휴대폰 두 번 탭 = 마디 메뉴
   const p = pagePoint(e); if (!p) return;
   const firstSys = App.lay.systems[0];
   if (p.page === 0 && firstSys && p.y < firstSys.top && p.y > App.lay.headH - 10 && p.x < 320) { infoDialog(); return; }
@@ -1647,6 +1666,8 @@ function onDblClick(e) {
   const h = hit(p);
   if (App.mode === 'note' && h.g && !h.note && !App.write) { App.write = true; render(); toast('쓰기 모드 켬 — 빈 곳 클릭 = 음표 추가'); }
 }
+/** 우클릭 (휴대폰은 꾹 누르기):
+ *  이음줄 위 = 이음줄 메뉴 · 음표·쉼표 위 = 그 음만 지우는 메뉴 · 마디 = 우클릭 두 번 (휴대폰은 두 번 탭) */
 function onContext(e) {
   const p = pagePoint(e); if (!p) return;
   e.preventDefault();
@@ -1654,7 +1675,69 @@ function onContext(e) {
   const sg = slurGrab(p); if (sg) { slurMenu(sg.id, e.clientX, e.clientY); return; }
   const h = hit(p);
   if (!h.g) return;
-  contextMenu(h.mi, e.clientX, e.clientY);
+  if (h.note) { App.lastCtx = null; noteMenu(h, e.clientX, e.clientY); return; }
+  if (isTouchUI()) return;   // 휴대폰·태블릿: 마디 메뉴는 두 번 탭으로
+  const now = Date.now(), lc = App.lastCtx;
+  if (lc && now - lc.t < 700 && lc.mi === h.mi) { App.lastCtx = null; contextMenu(h.mi, e.clientX, e.clientY); return; }
+  App.lastCtx = { t: now, mi: h.mi };
+  closePop();
+}
+/** 휴대폰·태블릿: 마디를 두 번 탭 = 마디 메뉴 */
+function onTapStart(e) {
+  if (e.touches.length !== 1) { App.tap0 = null; return; }
+  const t = e.touches[0]; App.tap0 = { x: t.clientX, y: t.clientY, t: Date.now() };
+}
+function onTapEnd(e) {
+  const t0 = App.tap0; App.tap0 = null;
+  if (!t0 || e.touches.length || e.changedTouches.length !== 1) return;
+  const t = e.changedTouches[0];
+  if (Math.hypot(t.clientX - t0.x, t.clientY - t0.y) > 12 || Date.now() - t0.t > 400) { App.lastTap = null; return; }   // 밀기·꾹 누르기는 탭이 아니에요
+  const pg = t.target && t.target.closest && t.target.closest('.page'); if (!pg) return;
+  const p = pagePointAt(+pg.dataset.page, t.clientX, t.clientY);
+  const h = hit(p);
+  if (!h.g || h.note || (App.mode === 'note' && App.write)) { App.lastTap = null; return; }
+  const now = Date.now(), lt = App.lastTap;
+  if (lt && now - lt.t < 450 && lt.mi === h.mi && Math.hypot(lt.x - t.clientX, lt.y - t.clientY) < 40) {
+    App.lastTap = null; App.tapMenuAt = now;
+    if (e.cancelable) e.preventDefault();
+    closeEditors();
+    contextMenu(h.mi, t.clientX, t.clientY);
+    return;
+  }
+  App.lastTap = { t: now, mi: h.mi, x: t.clientX, y: t.clientY };
+}
+/** 음표·쉼표 우클릭 메뉴: 누른 그 음만 지워요
+ *  (멜로디 음을 지워도 화음 탭 음은 그대로 · 화음 탭 음을 지워도 멜로디는 그대로 · 화음 탭에서는 멜로디가 잠겨요) */
+function noteMenu(h, x, y) {
+  const g = h.note, n = g.n, isOv = !!g.ov, k = h.headK === undefined ? -1 : h.headK;
+  if (App.mode === 'harm' && !isOv) { toast(LG('화음 탭에서는 멜로디가 잠겨 있어요 · 화음 음만 지울 수 있어요', 'The melody is locked in the Harmony tab · only harmony notes can be removed', '和音タブではメロディはロックされています')); return; }
+  const isRest = !!(n.rest || !n.p);
+  const multi = !isRest && k > -2 && (n.ps || []).length > 0;
+  const items = isRest ? [{ v: 'del', label: LG('쉼표 삭제', 'Delete rest', '休符を削除') }]
+    : k <= -2 ? [{ v: 'del', label: LG('이 꾸밈음 삭제', 'Delete this grace note', 'この装飾音を削除') }]
+      : multi ? [{ v: 'del', label: LG('이 음만 삭제', 'Delete this note only', 'この音だけ削除') }, { v: 'delAll', label: LG('이 화음 머리 모두 삭제', 'Delete the whole chord', '和音ごと削除') }]
+        : [{ v: 'del', label: LG('음표 삭제', 'Delete note', '音符を削除') }];
+  const where = isOv ? LG('화음 음', 'harmony note', '和音の音') : LG('멜로디', 'melody', 'メロディ');
+  App.sel = [g.id]; App.head = k !== -1 ? { id: g.id, k } : null; render();
+  popMenu(x, y, items, v => deleteNoteHead(g.id, v === 'delAll' ? null : k), `${g.mi + 1}${LG('마디', ' · m', '小節')} · ${where}`);
+}
+/** 음 하나 지우기: k = -1 원래 음 · 0.. 화음 머리 · -2.. 꾸밈음 · null = 그 음표 통째로 (다른 음표·성부는 건드리지 않아요) */
+function deleteNoteHead(id, k) {
+  const f = findNote(id); if (!f) return;
+  const n = f.n;
+  commit(() => {
+    if (k !== null && k <= -2 && n.gr) { n.gr.splice(-2 - k, 1); if (!n.gr.length) delete n.gr; return; }
+    if (k !== null && k >= 0 && n.ps && n.ps[k]) { n.ps.splice(k, 1); return; }
+    if (k === -1 && !n.rest && n.p && n.ps && n.ps.length) {
+      // 원래 음만 지우기: 남은 화음 머리 중 하나가 원래 음 자리로
+      const all = n.ps.slice().sort((a, b) => b.d - a.d);
+      n.p = all[0]; n.ps = all.slice(1); return;
+    }
+    removeSlursFor([id]);
+    filterAllNotes(x => x.id !== id);
+  });
+  App.sel = App.sel.filter(x => findNote(x)); App.head = null;
+  render();
 }
 
 /* 드래그 표시 */
@@ -1937,7 +2020,7 @@ function openChordEditor(mi, t) {
   box.className = 'editor chord-ed';
   // 자주 쓰는 기호만 작게 (나머지는 직접 입력)
   const KEYS = ['b', '#', 'm', 'M', 'sus4', '2', '7'];
-  box.innerHTML = `<div class="ed-label">${beatLabel(mi, t)}</div><div class="ed-row"><button class="ed-nav" data-d="-1">◀</button><input value="${esc(ex ? ex.name : '')}" placeholder="C, Am7, G/B" spellcheck="false" autocapitalize="off" autocomplete="off"><button class="ed-nav" data-d="1">▶</button></div><div class="ed-keys">${KEYS.map(k => `<button class="ed-key" data-k="${esc(k)}" tabindex="-1">${esc(k)}</button>`).join('')}</div>`;
+  box.innerHTML = `<div class="ed-label">${beatLabel(mi, t)}</div><div class="ed-row"><button class="ed-nav" data-d="-2" title="${esc(LG('한 박(코드 한 칸) 뒤로 · ←', 'One beat back · ←', '1拍戻る · ←'))}">&lt;&lt;</button><button class="ed-nav" data-d="-1" title="${esc(LG('반 박 뒤로 · ↓', 'Half a beat back · ↓', '半拍戻る · ↓'))}">◀</button><input value="${esc(ex ? ex.name : '')}" placeholder="C, Am7, G/B" spellcheck="false" autocapitalize="off" autocomplete="off"><button class="ed-nav" data-d="1" title="${esc(LG('반 박 앞으로 · ↑', 'Half a beat forward · ↑', '半拍進む · ↑'))}">▶</button><button class="ed-nav" data-d="2" title="${esc(LG('한 박(코드 한 칸) 앞으로 · →', 'One beat forward · →', '1拍進む · →'))}">&gt;&gt;</button></div><div class="ed-keys">${KEYS.map(k => `<button class="ed-key" data-k="${esc(k)}" tabindex="-1">${esc(k)}</button>`).join('')}</div>`;
   box._place = () => {
     const g = App.lay.meas[mi]; if (!g) return false;
     const pg = $(`.page[data-page="${g.page}"]`); if (!pg) return false;
@@ -1987,6 +2070,11 @@ function openChordEditor(mi, t) {
     if (e.key === 'Enter') { save(); box._save = null; box.remove(); App.chordEdit = null; render(); }
     else if (e.key === 'Escape') { saved = true; box.remove(); App.chordEdit = null; render(); }
     else if (e.key === ' ') { e.preventDefault(); move(e.shiftKey ? -beat / 2 : beat / 2); }
+    // 방향키: → 한 박 앞 · ← 한 박 뒤 · ↑ 반 박 앞 · ↓ 반 박 뒤 (코드를 쓴 채 누르면 저장하고 옮겨요)
+    else if (e.key === 'ArrowRight') { e.preventDefault(); move(beat); }
+    else if (e.key === 'ArrowLeft') { e.preventDefault(); move(-beat); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); move(beat / 2); }
+    else if (e.key === 'ArrowDown') { e.preventDefault(); move(-beat / 2); }
     else if (e.key === 'Tab') { e.preventDefault(); const next = e.shiftKey ? (t % beat ? -(t % beat) : -beat) : (beat - (t % beat)); move(next); }
   });
 }
@@ -1997,14 +2085,59 @@ function lyrRowAt(sys, y) {
   return row >= 0 && row < sys.verses.length ? row : -1;
 }
 /** 절 추가 · 지우기 (절은 마디마다 m.lyrics[절] 에 따로 있어요 · 빈 절 칸은 악보에 안 나와요) */
-function verseAdd() {
+/** 절(또는 후렴 줄) 추가 · refrain = 후렴 줄 · "고른 줄에만"이 켜져 있으면 마지막으로 누른 마디의 줄에만 칸 */
+function verseAdd(refrain) {
   const s = S(), n = s.lyricLines || 1;
-  if (n >= MAX_VERSES) return toast(LG(`가사는 ${MAX_VERSES}절까지 넣을 수 있어요`, `Up to ${MAX_VERSES} verses`, `歌詞は${MAX_VERSES}番まで`));
+  if (n >= MAX_VERSES) return toast(LG(`가사는 ${MAX_VERSES}줄까지 넣을 수 있어요`, `Up to ${MAX_VERSES} lyric lines`, `歌詞は${MAX_VERSES}行まで`));
+  let only = null;
+  if (App.lyrLineOnly) {
+    const g = App.lyrMi !== undefined && App.lyrMi !== null && App.lay.meas[App.lyrMi];
+    if (!g) return toast(LG('"고른 줄에만": 먼저 그 줄의 마디를 눌러 고르세요', '"Chosen line only": click a measure on that line first', '「選んだ段だけ」: 先にその段の小節を押してください'));
+    only = g.sys.idxs.map(i => S().measures[i].id);
+  }
   closeEditors();
-  commit(() => { s.lyricLines = n + 1; });
+  commit(() => {
+    s.lyricLines = n + 1;
+    const meta = {}; if (refrain) meta.refrain = true; if (only) meta.only = only;
+    if (refrain || only) { s.verseMeta = s.verseMeta || []; s.verseMeta[n] = meta; }
+    else if (s.verseMeta) s.verseMeta[n] = {};
+  });
   App.verse = n;
   buildSubbar(); render();
-  toast(LG(`${n + 1}절 칸을 만들었어요 · 줄마다 ${n + 1}절 칸을 눌러 쓰세요 (안 쓴 줄은 악보에 안 나와요)`, `Added verse ${n + 1} · click its row on each line (rows left empty are not printed)`, `${n + 1}番を追加しました · 各段の${n + 1}番の欄をクリック (空の段は表示されません)`));
+  const name = verseLabel(s, n);
+  toast(only ? LG(`${name} 칸을 이 줄에만 만들었어요`, `Added ${name} on this line only`, `${name}をこの段だけに追加しました`)
+    : LG(`${name} 칸을 만들었어요 · 줄마다 ${name} 칸을 눌러 쓰세요 (안 쓴 줄은 악보에 안 나와요)`, `Added ${name} · click its row on each line (rows left empty are not printed)`, `${name}を追加しました · 各段の欄をクリック (空の段は表示されません)`), 3200);
+}
+/** 후렴 가사 통일: 마디를 고르고 → 절 체크 → 지금 절 가사를 복사 */
+function refrainUnifyStart() {
+  if ((S().lyricLines || 1) < 2) return toast(LG('절이 둘 이상일 때 쓸 수 있어요 (＋ 절 추가)', 'Needs two or more verses', '2番以上のときに使えます'));
+  closeEditors();
+  App.lyrPick = !App.lyrPick; App.lyrPickFrom = null; App.selMeasures = [];
+  buildSubbar(); render();
+  if (App.lyrPick) toast(LG('후렴 마디를 드래그해서 고르세요 (휴대폰: 처음 마디 → 끝 마디를 차례로 탭) · Esc = 그만', 'Drag over the refrain measures (phone: tap the first, then the last) · Esc = cancel', 'リフレインの小節をドラッグ (スマホ: 最初→最後の小節をタップ) · Esc = 中止'), 4000);
+}
+function refrainUnifyDialog(idxs) {
+  App.lyrPick = false; App.lyrPickFrom = null; buildSubbar();
+  if (!idxs.length) return;
+  const s = S(), n = s.lyricLines || 1, src = Math.min(App.verse, n - 1);
+  const a = idxs[0] + 1, b = idxs[idxs.length - 1] + 1;
+  modal(`<h2>${LG('후렴 가사 통일', 'Unify refrain lyrics', 'リフレインの歌詞を統一')}</h2>
+    <p class="muted">${LG(`${a === b ? a : a + '–' + b}마디의 가사를 골라 둔 절과 똑같이 맞춰요.`, `Makes the lyrics of m.${a}${a === b ? '' : '–' + b} the same as the source verse.`, `${a}${a === b ? '' : '–' + b}小節の歌詞を同じにします。`)}</p>
+    <label class="fld">${LG('이 절의 가사를', 'Copy from', 'この番の歌詞を')}<select class="inp" id="ruSrc">${Array.from({ length: n }, (_, k) => `<option value="${k}"${k === src ? ' selected' : ''}>${esc(verseLabel(s, k))}</option>`).join('')}</select></label>
+    <div class="fld">${LG('아래 절에 똑같이 (체크)', 'To these verses', '下の番に同じく')}</div>
+    <div class="chips" id="ruDst">${Array.from({ length: n }, (_, k) => `<label class="chip"><input type="checkbox" value="${k}"${k !== src ? ' checked' : ''}> ${esc(verseLabel(s, k))}</label>`).join('')}</div>
+    <p class="warn">${LG('체크한 절의 이 마디 가사는 바뀌어요 (Ctrl+Z = 되돌리기)', 'Lyrics of the ticked verses in these measures are replaced (Ctrl+Z = undo)', 'チェックした番の歌詞は置き換わります (Ctrl+Z = 元に戻す)')}</p>
+    <div class="modal-btns"><button class="btn" data-close>${LG('취소', 'Cancel', 'キャンセル')}</button><button class="btn primary" data-ok>${LG('통일하기', 'Unify', '統一')}</button></div>`, md => {
+    md.querySelector('[data-ok]').addEventListener('click', () => {
+      const from = +$('#ruSrc', md).value;
+      const to = $$('#ruDst input:checked', md).map(x => +x.value).filter(v => v !== from);
+      closeModal();
+      if (!to.length) return toast(LG('통일할 절을 체크하세요', 'Tick at least one verse', '番をチェックしてください'));
+      commit(() => idxs.forEach(i => { const m = s.measures[i]; const t = m.lyrics[from] || ''; to.forEach(v => { if (t) m.lyrics[v] = t; else delete m.lyrics[v]; }); }));
+      App.selMeasures = []; render();
+      toast(LG(`${to.map(v => verseLabel(s, v)).join('·')} 가사를 ${verseLabel(s, from)}와 똑같이 맞췄어요`, `Copied ${verseLabel(s, from)} to ${to.map(v => verseLabel(s, v)).join(', ')}`, `${verseLabel(s, from)}を${to.map(v => verseLabel(s, v)).join('・')}にコピーしました`), 3200);
+    });
+  });
 }
 function verseDel() {
   const s = S(), n = s.lyricLines || 1, v = App.verse;
@@ -2016,6 +2149,7 @@ function verseDel() {
       Object.keys(m.lyrics || {}).forEach(k => { const kk = +k; if (kk < v) L2[kk] = m.lyrics[k]; else if (kk > v) L2[kk - 1] = m.lyrics[k]; });
       m.lyrics = L2;
     });
+    if (s.verseMeta) s.verseMeta.splice(v, 1);
     s.lyricLines = n - 1;
   });
   App.verse = Math.min(v, n - 2);
@@ -2051,12 +2185,14 @@ function openLyricLineEditor(mi) {
   const g0 = App.lay.meas[mi]; if (!g0) return;
   const sys0 = g0.sys, idxs = sys0.idxs.slice(), v = App.verse;
   const sysNo = App.lay.systems.indexOf(sys0);
+  App.lyrMi = mi;
+  const vl = verseLabel(S(), v);
   const slots = idxs.map(i => S().measures[i].notes.filter(n => lyrSlot(n, App.lay.tied.noSyl)).length);
   const total = slots.reduce((a, b) => a + b, 0);
   const a = idxs[0] + 1, b = idxs[idxs.length - 1] + 1;
   const box = document.createElement('div');
   box.className = 'editor lyric-ed line';
-  box.innerHTML = `<div class="ed-label">${LG(`${sysNo + 1}번째 줄 (${a}–${b}마디) · ${v + 1}절 · 음표·쉼표 ${total}개`, `Line ${sysNo + 1} (m.${a}–${b}) · verse ${v + 1} · ${total} notes/rests`, `${sysNo + 1}段目 (${a}–${b}小節) · ${v + 1}番 · 音符・休符 ${total}個`)} <span class="cnt"></span> <span class="muted">${LG('· | = 다음 마디로', '· | = next measure', '· | = 次の小節へ')}</span></div><div class="ed-row"><input value="${esc(lineLyricsText(idxs, v))}" placeholder="${LG('이 줄 가사를 한꺼번에 (예: 참 반 가 운 신 앙 소 식)', 'Lyrics for the whole line (e.g. a-ma-zing grace how sweet)', 'この段の歌詞をまとめて')}" spellcheck="false"><button class="ed-ok" tabindex="-1">${LG('입력', 'OK', '入力')}</button></div>`;
+  box.innerHTML = `<div class="ed-label">${LG(`${sysNo + 1}번째 줄 (${a}–${b}마디) · ${vl} · 음표·쉼표 ${total}개`, `Line ${sysNo + 1} (m.${a}–${b}) · ${vl} · ${total} notes/rests`, `${sysNo + 1}段目 (${a}–${b}小節) · ${vl} · 音符・休符 ${total}個`)} <span class="cnt"></span> <span class="muted">${LG('· | = 다음 마디로', '· | = next measure', '· | = 次の小節へ')}</span></div><div class="ed-row"><input value="${esc(lineLyricsText(idxs, v))}" placeholder="${LG('이 줄 가사를 한꺼번에 (예: 참 반 가 운 신 앙 소 식)', 'Lyrics for the whole line (e.g. a-ma-zing grace how sweet)', 'この段の歌詞をまとめて')}" spellcheck="false"><button class="ed-ok" tabindex="-1">${LG('입력', 'OK', '入力')}</button></div>`;
   box._place = () => {
     const g = App.lay.meas[idxs[0]]; if (!g) return false;
     const pg = $(`.page[data-page="${g.page}"]`); if (!pg) return false;
@@ -2110,7 +2246,8 @@ function openLyricEditor(mi) {
   const box = document.createElement('div');
   box.className = 'editor lyric-ed';
   const notes = m.notes.filter(n => lyrSlot(n, App.lay.tied.noSyl)).length;   // 쉼표도 한 자리
-  box.innerHTML = `<div class="ed-label">${mi + 1}마디 · ${v + 1}절 · 음표·쉼표 ${notes}개 <span class="cnt"></span></div><div class="ed-row"><input value="${esc(m.lyrics[v] || '')}" placeholder="가사 (예: 참 반 가 운)" spellcheck="false"><button class="ed-ok" tabindex="-1">${LG('입력', 'OK', '入力')}</button></div>`;
+  App.lyrMi = mi;
+  box.innerHTML = `<div class="ed-label">${mi + 1}마디 · ${esc(verseLabel(S(), v))} · 음표·쉼표 ${notes}개 <span class="cnt"></span></div><div class="ed-row"><input value="${esc(m.lyrics[v] || '')}" placeholder="가사 (예: 참 반 가 운)" spellcheck="false"><button class="ed-ok" tabindex="-1">${LG('입력', 'OK', '入力')}</button></div>`;
   // 다시 그려도(마우스가 다른 마디로 가도) 같은 자리에 그대로 · Enter 나 [입력]을 눌러야 닫혀요
   box._place = () => {
     const g = App.lay.meas[mi]; if (!g) return false;
@@ -2411,11 +2548,11 @@ function newScoreDialog(startup, type, edit, parts) {
   if (ens && !parts) return ensembleDialog(startup, edit);
   const s0 = edit ? S() : null, cur = edit ? curType(s0) : null;
   const v = edit ? {
-    title: s0.title, comp: s0.composer, lyr: s0.lyricist, num: s0.time.num, den: s0.time.den, mpl: s0.lines[0] || 4, lines: s0.lines.length,
+    title: s0.title, comp: s0.composer, lyr: s0.lyricist, artist: s0.artist || '', hymn: s0.hymn || '', num: s0.time.num, den: s0.time.den, mpl: s0.lines[0] || 4, lines: s0.lines.length,
     key: s0.key, tempo: s0.tempo || '', term: s0.tempoText || '', swing: !!s0.swing, ll: s0.lyricLines || 1,
     clef: (cur !== 'grand' && type !== 'grand') ? (cur === 'grand' ? 'treble' : staffClef(s0, 0)) : 'treble',
     inst: (s0.staves[0] && s0.staves[0].name && cur !== 'grand') ? s0.staves[0].name : (type === 'voicePiano' ? 'Voice' : 'Instrument')
-  } : { title: '', comp: '', lyr: '', num: 4, den: 4, mpl: 4, lines: 4, key: 0, tempo: 90, term: tempoTerm(90), ll: 1, clef: 'treble', inst: type === 'voicePiano' ? 'Voice' : 'Instrument' };
+  } : { title: '', comp: '', lyr: '', artist: '', hymn: '', num: 4, den: 4, mpl: 4, lines: 4, key: 0, tempo: 90, term: tempoTerm(90), ll: 1, clef: 'treble', inst: type === 'voicePiano' ? 'Voice' : 'Instrument' };
   if (type === 'voicePiano' && isCClef(v.clef)) v.clef = 'treble';
   const loss = edit && (type !== cur || (ens && ensembleStaffN(parts) < staffCount(s0))) ? typeLoss(s0, type, ens ? ensembleStaffN(parts) : undefined) : 0;
   const okLabel = edit ? (loss ? `바꾸기 (음표 ${loss}개 사라져요)` : '저장') : '악보 만들기';
@@ -2426,7 +2563,9 @@ function newScoreDialog(startup, type, edit, parts) {
   const head = edit ? `곡 정보` : `새 악보`;
   modal(`<h2>${head} <span class="type-tag">${SCORE_TYPES[type].label}</span>${edit && type !== cur ? ' <span class="type-tag warn-tag">종류 바꿈</span>' : ''}</h2>
   <label class="fld">제목<input class="inp" id="nTitle" placeholder="곡 제목" value="${esc(v.title)}"></label>
-  <div class="row2"><label class="fld">아티스트 · 작곡<input class="inp" id="nComp" placeholder="(선택) 악보 오른쪽 위" value="${esc(v.comp)}"></label><label class="fld">작사<input class="inp" id="nLyr" placeholder="(선택) 악보 왼쪽 위" value="${esc(v.lyr)}"></label></div>
+  <div class="row2"><label class="fld">${LG('작곡가', 'Composer', '作曲者')}<input class="inp" id="nComp" placeholder="${esc(LG('(선택) 예: 이빈 작곡', '(optional)', '(任意)'))}" value="${esc(v.comp)}"></label><label class="fld">${LG('작사가', 'Lyricist', '作詞者')}<input class="inp" id="nLyr" placeholder="${esc(LG('(선택) 예: 이빈 작사', '(optional)', '(任意)'))}" value="${esc(v.lyr)}"></label></div>
+  <div class="row2"><label class="fld">${LG('아티스트', 'Artist', 'アーティスト')}<input class="inp" id="nArtist" placeholder="${esc(LG('(선택) 예: 소리엘', '(optional)', '(任意)'))}" value="${esc(v.artist)}"></label><label class="fld">${LG('찬송가', 'Hymn', '賛美歌')}<input class="inp" id="nHymn" placeholder="${esc(LG('(선택) 예: 새찬송가 23장', '(optional) e.g. Hymn 23', '(任意) 例: 聖歌 23番'))}" value="${esc(v.hymn)}"></label></div>
+  <p class="muted small" style="margin:-4px 0 6px">${LG('네 칸 모두 악보 오른쪽 위에 위에서부터 차례로 적혀요', 'All four are printed at the top right, in this order', '4つとも楽譜の右上に上から順に表示されます')}</p>
   <div class="row3"><label class="fld">박자<span class="tsig"><input class="inp" id="nNum" type="number" min="1" max="16" value="${v.num}"> / <select class="inp" id="nDen">${[2, 4, 8, 16].map(d => `<option${d === v.den ? ' selected' : ''}>${d}</option>`).join('')}</select></span></label>
   <label class="fld">한 줄 마디 수<input class="inp" id="nMpl" type="number" min="1" max="12" value="${v.mpl}"></label>
   ${edit ? `<div class="fld"><span>줄 수</span><span class="muted small" style="padding-top:8px">${v.lines}줄 · ${s0.measures.length}마디 (늘리고 줄이기는 F7 마디 편집)</span></div>` : `<label class="fld">줄 수<input class="inp" id="nLines" type="number" min="1" max="60" value="${v.lines}"></label>`}</div>
@@ -2458,7 +2597,7 @@ function newScoreDialog(startup, type, edit, parts) {
     md.querySelector('[data-ok]').addEventListener('click', () => {
       const clef = type === 'grand' ? 'treble' : ens ? ensembleStaves(parts)[0].clef : (clefBase === 'c' ? 'c' + cLine : clefBase);
       const inst = $('#nInst', md) ? $('#nInst', md).value.trim() : '';
-      const vals = { title: $('#nTitle', md).value.trim(), composer: $('#nComp', md).value.trim(), lyricist: $('#nLyr', md).value.trim(), num: +$('#nNum', md).value || 4, den: +$('#nDen', md).value, mpl: Math.max(1, +$('#nMpl', md).value || 4), key: +$('#nKey', md).value, tempo: tempoInput($('#nTempo', md).value), tempoText: $('#nTerm', md).value.trim(), swing: $('#nSwing', md).checked, lyricLines: +$('#nLL', md).value };
+      const vals = { title: $('#nTitle', md).value.trim(), composer: $('#nComp', md).value.trim(), lyricist: $('#nLyr', md).value.trim(), artist: $('#nArtist', md).value.trim(), hymn: $('#nHymn', md).value.trim(), num: +$('#nNum', md).value || 4, den: +$('#nDen', md).value, mpl: Math.max(1, +$('#nMpl', md).value || 4), key: +$('#nKey', md).value, tempo: tempoInput($('#nTempo', md).value), tempoText: $('#nTerm', md).value.trim(), swing: $('#nSwing', md).checked, lyricLines: +$('#nLL', md).value };
       if (edit) { applyScoreEdit(type, vals, clef, inst, parts); closeModal(); return; }
       stopPlay();
       App.s = newScore(Object.assign({ type, instName: inst, clef, parts, lines: Math.max(1, +$('#nLines', md).value || 4) }, vals));
@@ -2484,7 +2623,7 @@ function applyScoreEdit(type, vals, clef, inst, parts) {
       s.staves[0].clef = clef; s.clef = clef;
       if (type === 'voicePiano' || type === 'instPiano') s.staves[0].name = inst || s.staves[0].name;
     }
-    s.title = vals.title; s.composer = vals.composer; s.lyricist = vals.lyricist;
+    s.title = vals.title; s.composer = vals.composer; s.lyricist = vals.lyricist; s.artist = vals.artist; s.hymn = vals.hymn;
     s.time = { num: vals.num, den: vals.den }; s.key = vals.key;
     s.tempo = vals.tempo; s.tempoText = vals.tempoText; s.swing = !!vals.swing; s.lyricLines = vals.lyricLines;
     // 한 줄 마디 수를 바꾸면 줄을 다시 나눠요
@@ -4599,6 +4738,7 @@ function onKey(e) {
   if (k === 'Tab') { e.preventDefault(); const i = MODES.findIndex(m => m[0] === App.mode); return setMode(MODES[mod(i + (e.shiftKey ? -1 : 1), MODES.length)][0]); }
   if (k === 'Escape') {
     if (App.mode === 'harm') { e.preventDefault(); return leaveHarm(); }
+    if (App.lyrPick) { App.lyrPick = false; App.lyrPickFrom = null; buildSubbar(); }
     closePop(); closeEditors(); if (App.widthEdit) { App.widthEdit = false; App.selBar = null; } App.sel = []; App.selSlur = null; App.selHp = null; App.slurEdit = false; App.selMeasures = []; render(); return;
   }
   // 고른 이음줄·붙임줄 (이음줄 모드 · 음표 모드): Delete = 지우기 · ←→ = 앞·뒤 음으로 옮기기 · T = 붙임줄↔이음줄
@@ -4751,7 +4891,9 @@ function onAction(act, btn, e) {
     case 'grace': return toggleGrace();
     case 'slurTool': return slurTool();
     case 'text': return editText();
-    case 'verseAdd': return verseAdd();
+    case 'verseAdd': return verseAdd(false);
+    case 'refrainAdd': return verseAdd(true);
+    case 'refrainUnify': return refrainUnifyStart();
     case 'verseDel': return verseDel();
     case 'fillAll': return fillRests(false);
     case 'fillWorked': return fillRests(true);
@@ -4804,7 +4946,10 @@ function init() {
     const v = e.target.closest('[data-verse]'); if (v) { closeEditors(); App.verse = +v.dataset.verse; render(); return; }
     const lu = e.target.closest('[data-lyrunit]'); if (lu) { closeEditors(); App.lyrUnit = lu.dataset.lyrunit; try { localStorage.setItem('bflat.lyrUnit', App.lyrUnit); } catch (_) { } render(); return; }
   });
-  document.addEventListener('change', e => { if (e.target.id === 'selDyn' && e.target.value) setDyn(e.target.value); });
+  document.addEventListener('change', e => {
+    if (e.target.id === 'selDyn' && e.target.value) setDyn(e.target.value);
+    if (e.target.id === 'lyrLineOnly') App.lyrLineOnly = e.target.checked;
+  });
   const pages = $('#pages');
   pages.addEventListener('mousedown', onMouseDown);
   $('#scroller').addEventListener('mousedown', e => { if (!e.target.closest('.page')) onMouseDown(e); });
@@ -4812,6 +4957,8 @@ function init() {
   window.addEventListener('mouseup', onMouseUp);
   pages.addEventListener('dblclick', onDblClick);
   pages.addEventListener('contextmenu', onContext);
+  pages.addEventListener('touchstart', onTapStart, { passive: true });
+  pages.addEventListener('touchend', onTapEnd, { passive: false });
   // 터치(손가락·S펜): 고른 이음줄을 끌어서 옮기기
   pages.addEventListener('touchstart', onSlurTouchStart, { passive: false });
   document.addEventListener('keydown', onKey);
