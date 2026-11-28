@@ -1,6 +1,6 @@
 {
- "version": "f1f291123141",
- "built": "2026-11-27 18:56",
+ "version": "f79362e17550",
+ "built": "2026-11-28 23:15",
  "files": {
   "assets/apple-touch-icon.png": {
    "sha256": "e9aca0c2fe30a5f6300661decbd1d578c00c7c0cead84b40374e696224d6712f",
@@ -27,8 +27,8 @@
    "size": 1379
   },
   "css/style.css": {
-   "sha256": "7f30fd463d9ab47d2a949ec146f5adde2a2774ad92b6654f638ffb1330872b94",
-   "size": 43855
+   "sha256": "09963efa29d4be04797daa3c9749bb013aa072dab4c8e90829342658a6582a6a",
+   "size": 44773
   },
   "fonts/Griun_Yeeun-Rg.ttf": {
    "sha256": "866cfc5bfb52eacf4e39059524d719775895856eb94f170bcc4f4c89b2ae1aaa",
@@ -39,8 +39,8 @@
    "size": 5717
   },
   "js/app.js": {
-   "sha256": "13f9bf6361907d282b68ab78dff15e5859b70d6aadbfd7120e7483c6b8ab1011",
-   "size": 364281
+   "sha256": "83c05246dacd5c2bbf33d67103fb931528a61e4125616ebd68a48b5f330246b9",
+   "size": 369850
   },
   "js/audio.js": {
    "sha256": "7f0a57499869b7346c64b032bb935bd12f89af96c1ad27a179c3e91cdedf58f4",
@@ -63,8 +63,8 @@
    "size": 16393
   },
   "js/i18n.js": {
-   "sha256": "1d729d578a8372e5c88f13735197e9eee270782c62247e4d963b9c4eb1a3d8b7",
-   "size": 87276
+   "sha256": "be22e8918cf89188beca5f9c1b4879d07d1f767403e48206ad604ca9d68b348e",
+   "size": 88410
   },
   "js/io.js": {
    "sha256": "5d7d5cf43585ba7b4ef4003f2373a8f29b0d9934cbab69820b2784d0172c51b4",
@@ -75,8 +75,8 @@
    "size": 29704
   },
   "js/render.js": {
-   "sha256": "d4e91d5406d3c5cdcc43beb7858a3debc62cae5d659ea3dbf507fd4bb9a38d42",
-   "size": 82057
+   "sha256": "d26adf2d8d39826da58d5c07d8b3c340c192809537ac0716efde11717177456d",
+   "size": 82447
   },
   "js/vendor/pdf.min.js": {
    "sha256": "5b5799e6f8c680663207ac5b42ee14eed2a406fa7af48f50c154f0c0b1566946",
