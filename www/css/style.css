@@ -74,6 +74,9 @@ select.btn { padding: 5px 8px; }
 .seg .btn { border-radius: 6px; }
 .mus, .btn.mus { font-family: 'Segoe UI Symbol', 'Noto Music', serif; }
 .btn.mus { font-size: 18px; padding: 1px 8px; min-width: 32px; line-height: 1.4; }
+.btn.mus.rest { font-size: 17px; }
+.btn.hp svg { display: block; margin: 0 auto; }
+body:not(.touch) .touch-only { display: none !important; }
 .btn.art { min-width: 34px; font-family: 'Segoe UI Symbol', 'Segoe UI', serif; font-weight: 700; }
 .mini { font-size: 13px; color: var(--muted); display: inline-flex; align-items: center; gap: 4px; }
 .mini input { width: 46px; padding: 3px 5px; border: 1px solid var(--line); border-radius: 6px; }
