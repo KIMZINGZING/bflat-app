@@ -16,8 +16,25 @@ function buildPerformance(s, ctxs, opt) {
   for (let k = 0; k < k0; k++) s.measures[order[k]].notes.forEach(n => { const mm = TEMPO_RE.exec(n.text || ''); if (mm) tempo = +mm[1]; });
   const ev = [], marks = [], chords = [];
   let time = 0;
-  const DYN_VEL = { ppp: .25, pp: .33, p: .45, mp: .58, mf: .7, f: .82, ff: .92, fff: 1 };
+  const DYN_VEL = { ppp: .25, pp: .33, p: .45, mp: .58, mf: .7, f: .82, ff: .92, fff: 1, 'subito p': .45, 'subito f': .82, rf: .85, rfz: .85 };
+  // 그 음만 세게 (sf·sfz) · 세게 친 뒤 바로 여리게 (fp·sfp: 그 음 세게 → 다음부터 p)
+  const DYN_ACCENT = { sf: 1.3, sfz: 1.3, fz: 1.3, sffz: 1.4, fp: 1.25, sfp: 1.3 };
+  const DYN_AFTER = { fp: .45, sfp: .45 };
   const vel = Array(nSt).fill(.72);
+  // 크레셴도(점점 세게) · 데크레셴도(점점 여리게): 그 구간 안의 음은 처음 세기에서 ±35% 까지 고르게 바꿔요
+  const hpIdx = new Map(); s.measures.forEach((m, i) => hpIdx.set(m.id, i));
+  const hpList = (s.hairpins || []).map(hp => ({ type: hp.type, si: hp.si || 0, a: hpIdx.get(hp.a.m), ta: hp.a.t, b: hpIdx.get(hp.b.m), tb: hp.b.t })).filter(h => h.a !== undefined && h.b !== undefined);
+  const hpFactor = (si, mi, t) => {
+    let f = 1;
+    hpList.forEach(h => {
+      if (h.si !== si) return;
+      const pos = mi + t / (ctxs[mi].cap || 1), pa = h.a + h.ta / (ctxs[h.a].cap || 1), pb = h.b + h.tb / (ctxs[h.b].cap || 1);
+      if (pos < pa || pos >= pb || pb <= pa) return;   // 끝나는 자리에서 시작하는 음은 구간 밖
+      const r = (pos - pa) / (pb - pa);
+      f *= h.type === 'dim' ? 1 - .35 * r : 1 + .35 * r;
+    });
+    return f;
+  };
   const pending = new Map(); // 붙임줄: 다음 음표 id → [이어 갈 이벤트]
   for (let k = k0; k < order.length; k++) {
     const mi = order[k], m = s.measures[mi], c = ctxs[mi];
@@ -68,7 +85,8 @@ function buildPerformance(s, ctxs, opt) {
         let dd = dur;
         if ((n.art || []).includes('staccato')) dd *= .5;
         if ((n.art || []).includes('fermata')) dd *= 1.6;
-        const v = vel[si] * ((n.art || []).some(a => a === 'accent' || a === 'marcato') ? 1.18 : 1) * (midis.length > 2 ? .8 : 1);
+        const v = vel[si] * ((n.art || []).some(a => a === 'accent' || a === 'marcato') ? 1.18 : 1) * (midis.length > 2 ? .8 : 1) * (DYN_ACCENT[n.dyn] || 1) * (hpList.length ? hpFactor(si, mi, t0) : 1);
+        if (DYN_AFTER[n.dyn]) vel[si] = DYN_AFTER[n.dyn];
         // 박자치기 (X 머리): 음 높이 없이 손뼉 소리
         if (isClap(n)) { ev.push({ time: st, dur: Math.min(dd, .25), midi: 60, vel: Math.min(1, v), id: n.id, mi, perc: true }); return; }
         // 꾸밈음: 박 바로 앞에 짧게 (앞 음표 끝을 조금 빌려요)
