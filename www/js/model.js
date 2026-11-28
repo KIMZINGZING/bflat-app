@@ -211,6 +211,7 @@ function fixIds(s) {
   let max = 0;
   s.measures.forEach(m => { max = Math.max(max, m.id || 0); measureAllNotes(m).forEach(n => max = Math.max(max, n.id || 0)); });
   (s.slurs || []).forEach(x => max = Math.max(max, x.id || 0));
+  (s.hairpins || []).forEach(x => max = Math.max(max, x.id || 0));
   _uid = Math.max(_uid, max + 1);
   s.measures.forEach(m => {
     if (!m.id) m.id = uid();
@@ -219,6 +220,10 @@ function fixIds(s) {
   });
   s.slurs = (s.slurs || []).filter(x => x.a && x.b);
   s.slurs.forEach(x => { if (!x.id) x.id = uid(); });
+  // 크레셴도·데크레셴도: 지워진 마디에 걸린 것은 빼요
+  const mids = new Set(s.measures.map(m => m.id));
+  s.hairpins = (s.hairpins || []).filter(x => x && x.a && x.b && mids.has(x.a.m) && mids.has(x.b.m));
+  s.hairpins.forEach(x => { if (!x.id) x.id = uid(); });
   migrateLyricRests(s);
   migrateLyricSlurs(s, !!s._fromXml); delete s._fromXml;
   migrateLyricTies(s);
